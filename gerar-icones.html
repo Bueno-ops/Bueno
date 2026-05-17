@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gerar Ícones - Rotas Inteligentes</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:Segoe UI,sans-serif; }
+body { background:#f0f4ff; display:flex; justify-content:center; padding:40px 20px; }
+.container { max-width:600px; width:100%; }
+h1 { font-size:1.5rem; color:#333; margin-bottom:8px; }
+p { font-size:0.9rem; color:#888; margin-bottom:24px; }
+.cards { display:flex; flex-direction:column; gap:12px; }
+.card { background:white; border-radius:16px; padding:20px; box-shadow:0 2px 12px rgba(0,0,0,0.08); display:flex; align-items:center; gap:16px; }
+.card img { width:64px; height:64px; border-radius:12px; }
+.card-info { flex:1; }
+.card-info h3 { font-size:1rem; color:#333; }
+.card-info span { font-size:0.8rem; color:#888; }
+.btn { background:#007bff; color:white; border:none; border-radius:10px; padding:10px 20px; font-size:0.9rem; font-weight:600; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+.btn:hover { background:#0056b3; }
+.btn:disabled { background:#ccc; cursor:default; }
+canvas { display:none; }
+.msg { margin-top:16px; padding:12px; background:#d4edda; border-radius:10px; color:#155724; font-size:0.85rem; display:none; }
+.msg.erro { background:#f8d7da; color:#721c24; }
+.msg.visivel { display:block; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>Gerar Ícones PNG</h1>
+    <p>Clique em cada tamanho para gerar e baixar. Use os arquivos .png para publicar nas lojas.</p>
+    <div class="cards" id="cards"></div>
+    <div class="msg" id="msg"></div>
+    <canvas id="canvas"></canvas>
+</div>
+<script>
+const tamanhos = [48, 72, 96, 128, 144, 152, 192, 256, 384, 512];
+const nomes = [
+    'Favicon / Android small', 'Android', 'Android / iOS', 'iOS small',
+    'Android large', 'iOS (Safari)', 'Android / PWA medium', 'Play Store',
+    'App Store required', 'Play Store high-res'
+];
+const container = document.getElementById('cards');
+
+function mostrarMsg(texto, erro) {
+    const m = document.getElementById('msg');
+    m.textContent = texto; m.className = 'msg visivel' + (erro ? ' erro' : '');
+    setTimeout(() => m.classList.remove('visivel'), 3000);
+}
+
+tamanhos.forEach((t, i) => {
+    const card = document.createElement('div'); card.className = 'card';
+    const img = document.createElement('img');
+    const svg = new XMLSerializer().serializeToString(document.querySelector('#icon-svg') || (() => {
+        const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        s.setAttribute('viewBox', '0 0 512 512'); s.innerHTML = '<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4da3ff"/><stop offset="100%" stop-color="#0056b3"/></linearGradient></defs><ellipse cx="256" cy="460" rx="100" ry="20" fill="#003366" opacity="0.15"/><path d="M256 30C149 30 64 115 64 222c0 130 192 290 192 290s192-160 192-290C448 115 363 30 256 30z" fill="url(#g)"/><circle cx="256" cy="210" r="90" fill="white"/><polygon points="256,145 282,265 256,240 230,265" fill="#0056b3"/><polygon points="256,275 230,265 256,240 282,265" fill="#4da3ff"/><circle cx="256" cy="210" r="12" fill="#007bff"/><circle cx="256" cy="210" r="5" fill="white"/>';
+        document.body.appendChild(s); return s;
+    })()).toString();
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    card.innerHTML = '<div class="card-info"><h3>' + t + 'x' + t + '</h3><span>' + (nomes[i] || '') + '</span></div><button class="btn" data-size="' + t + '">Baixar PNG</button>';
+    card.querySelector('.btn').onclick = function() {
+        const sz = parseInt(this.dataset.size);
+        const c = document.getElementById('canvas');
+        c.width = sz; c.height = sz;
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, sz, sz);
+        const img2 = new Image();
+        img2.onload = () => {
+            ctx.drawImage(img2, 0, 0, sz, sz);
+            const link = document.createElement('a');
+            link.download = 'icon-' + sz + '.png';
+            link.href = c.toDataURL('image/png');
+            link.click();
+            mostrarMsg('Ícone ' + sz + 'x' + sz + ' baixado!');
+        };
+        img2.onerror = () => mostrarMsg('Erro ao gerar ícone ' + sz + 'x' + sz, true);
+        img2.src = img.src;
+    };
+    card.prepend(img);
+    container.appendChild(card);
+});
+</script>
+</body>
+</html>
