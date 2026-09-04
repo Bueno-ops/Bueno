@@ -1,8 +1,19 @@
-const CACHE = 'rotas-cache-v1';
+const CACHE = 'rotas-cache-v4';
 const URLS = [
     'app.html',
+    'index.html',
     'manifest.json',
     'icon.svg',
+    'icon-48.png',
+    'icon-72.png',
+    'icon-96.png',
+    'icon-128.png',
+    'icon-144.png',
+    'icon-152.png',
+    'icon-192.png',
+    'icon-256.png',
+    'icon-384.png',
+    'icon-512.png',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
     'https://fonts.googleapis.com/icon?family=Material+Icons',
@@ -17,7 +28,7 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
     e.waitUntil(
-        caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+        caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())
     );
 });
 
@@ -44,3 +55,32 @@ async function networkFirst(req) {
         return cached || new Response(JSON.stringify({ error: 'offline' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
     }
 }
+
+self.addEventListener('push', e => {
+    let data = { title: 'Rotas Inteligentes', body: '', icon: '/icon-192.png' };
+    try { if (e.data) data = { ...data, ...e.data.json() }; } catch {}
+    e.waitUntil(
+        self.registration.showNotification(data.title, {
+            body: data.body,
+            icon: data.icon,
+            badge: '/icon-96.png',
+            vibrate: [200, 100, 200],
+            sound: 'default',
+            tag: 'rota-notificacao',
+            requireInteraction: true
+        })
+    );
+});
+
+self.addEventListener('notificationclick', e => {
+    e.notification.close();
+    e.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+            if (clientList.length > 0) {
+                clientList[0].focus();
+            } else {
+                clients.openWindow('./app.html');
+            }
+        })
+    );
+});

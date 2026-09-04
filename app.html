@@ -4,17 +4,41 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rotas Inteligentes</title>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <meta name="description" content="App de rotas inteligentes com navegação passo a passo, alertas de trânsito, modo motorista e pontos de interesse">
+    <meta name="theme-color" content="#007bff">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="application-name" content="Rotas">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/svg+xml" href="icon.svg">
-    <link rel="apple-touch-icon" href="icon.svg">
+    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Rotas">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
-        body,html { width:100%; height:100%; overflow:hidden; }
+        :root { --bg:#fff; --bg2:#f5f5f5; --bg3:#f0f4ff; --text:#333; --text2:#888; --text3:#666; --border:#eee; --shadow:rgba(0,0,0,0.15); --card-bg:#fff; --input-bg:#fff; }
+        .dark-mode { --bg:#1a1a2e; --bg2:#16213e; --bg3:#1a1a3e; --text:#e0e0e0; --text2:#999; --text3:#aaa; --border:#2a2a4a; --shadow:rgba(0,0,0,0.4); --card-bg:#16213e; --input-bg:#0f3460; }
+        .dark-mode .barra-busca, .dark-mode .barra-origem, .dark-mode .painel-veiculos, .dark-mode .painel-info-rota,
+        .dark-mode .painel-instrucoes, .dark-mode .painel-favoritos, .dark-mode .navegacao-header,
+        .dark-mode .modal-conteudo, .dark-mode .modal-reporte-conteudo, .dark-mode .modal-gps-conteudo,
+        .dark-mode .seletor-hierarquico, .dark-mode .sugestoes-container, .dark-mode .notif-transito,
+        .dark-mode .botao-localizacao, .dark-mode .botao-limpar-rota, .dark-mode .botao-toggle-mapa { background:var(--card-bg) !important; color:var(--text) !important; }
+        .dark-mode .toggle-instrucoes-btn { background:var(--card-bg) !important; color:var(--text) !important; }
+        .dark-mode input { background:var(--input-bg) !important; color:var(--text) !important; border-color:#2a2a4a !important; }
+        .dark-mode .botao-veiculo { background:var(--bg2) !important; }
+        .dark-mode .botao-veiculo.ativo { background:#007bff !important; }
+        .dark-mode .botao-veiculo span, .dark-mode .botao-veiculo i { color:var(--text) !important; }
+        .dark-mode .botao-veiculo.ativo span, .dark-mode .botao-veiculo.ativo i { color:#fff !important; }
+        .dark-mode .painel-veiculos h3, .dark-mode .painel-info-rota .info-linha,
+        .dark-mode .instrucao-texto, .dark-mode .nav-instrucao { color:var(--text) !important; }
+        .dark-mode .sugestao-item:hover, .dark-mode .hier-item:hover { background:var(--bg3) !important; }
+        .dark-mode .info-viagem-pois .poi-btn { background:var(--bg2) !important; color:var(--text) !important; }
+        .dark-mode #mapa { filter:brightness(0.85) saturate(0.9); }
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; transition:background-color 0.3s, color 0.3s, border-color 0.3s; }
+        body,html { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--text); }
         .app-container { position:relative; width:100%; height:100%; }
         #mapa { position:absolute; top:0; left:0; width:100%; height:100%; z-index:1; }
         .barra-busca-container { position:absolute; top:0; left:0; width:100%; padding:20px; z-index:10; display:flex; justify-content:center; }
@@ -65,6 +89,19 @@
         .botao-limpar-rota i { color:#dc3545; font-size:22px; }
         .botao-toggle-mapa { position:absolute; right:20px; bottom:304px; z-index:10; background:white; border:none; border-radius:50%; width:44px; height:44px; box-shadow:0 2px 10px rgba(0,0,0,0.2); cursor:pointer; display:flex; align-items:center; justify-content:center; }
         .botao-toggle-mapa i { color:#333; font-size:22px; }
+        .install-banner { position:absolute; top:0; left:0; width:100%; z-index:25; background:linear-gradient(135deg,#007bff,#0056b3); color:#fff; padding:12px 20px; display:none; align-items:center; justify-content:space-between; box-shadow:0 4px 15px rgba(0,0,0,0.3); gap:12px; }
+        .install-banner.visivel { display:flex; animation:slideDown 0.4s ease; }
+        .install-banner-conteudo { display:flex; align-items:center; gap:12px; flex:1; min-width:0; }
+        .install-banner-icon { width:40px; height:40px; flex-shrink:0; }
+        .install-banner-texto { display:flex; flex-direction:column; min-width:0; }
+        .install-banner-titulo { font-size:0.9rem; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .install-banner-sub { font-size:0.75rem; opacity:0.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .install-banner-btn { background:#fff; color:#007bff; border:none; border-radius:20px; padding:8px 20px; font-weight:600; font-size:0.85rem; cursor:pointer; flex-shrink:0; transition:transform 0.15s, opacity 0.3s; }
+        .install-banner-btn:hover:not(:disabled) { transform:scale(1.05); }
+        .install-banner-btn:disabled { cursor:default; }
+        .install-banner-fechar { background:none; border:none; color:rgba(255,255,255,0.7); cursor:pointer; font-size:1.3rem; padding:0 4px; flex-shrink:0; line-height:1; }
+        .install-banner-fechar:hover { color:#fff; }
+        @keyframes slideDown { from { transform:translateY(-100%); opacity:0; } to { transform:translateY(0); opacity:1; } }
         .loading-overlay { position:absolute; top:0; left:0; width:100%; height:100%; z-index:20; background:rgba(0,0,0,0.3); display:none; align-items:center; justify-content:center; pointer-events:none; }
         .loading-overlay.ativo { display:flex; pointer-events:auto; }
         .spinner { width:48px; height:48px; border:4px solid rgba(255,255,255,0.3); border-top-color:#007bff; border-radius:50%; animation:spin 0.8s linear infinite; }
@@ -111,6 +148,7 @@
 .seletor-hierarquico .hier-item .hier-nome { }
 .seletor-hierarquico .hier-item .hier-contexto { font-size:0.75rem; color:#999; }
 .seletor-hierarquico .hier-carregando { padding:20px; text-align:center; color:#888; font-size:0.85rem; }
+.seletor-hierarquico .hier-header { padding:6px 16px; font-size:0.65rem; text-transform:uppercase; letter-spacing:1px; color:#007bff; font-weight:600; }
 .seletor-hierarquico .hier-voltar { padding:6px 12px; cursor:pointer; color:#007bff; font-size:0.8rem; display:flex; align-items:center; gap:4px; border-bottom:1px solid #eee; flex-shrink:0; }
 
         /* MODAL PERMISSÃO GPS */
@@ -147,9 +185,40 @@
         .painel-favoritos .fav-item i { font-size:16px; color:#ffc107; }
         .painel-favoritos .fav-item .fav-excluir { margin-left:auto; color:#ccc; cursor:pointer; font-size:16px; }
         .painel-favoritos .fav-item .fav-excluir:hover { color:#dc3545; }
+        /* TEMA ESCURO TOGGLE */
+        .tema-toggle { position:absolute; right:20px; top:180px; z-index:9; background:var(--card-bg,#fff); border:none; border-radius:50%; width:36px; height:36px; box-shadow:0 2px 8px var(--shadow,rgba(0,0,0,0.15)); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--text,#333); }
+        /* WAYPOINTS */
+        .waypoints-container { display:none; flex-direction:column; gap:4px; border-top:1px solid var(--border,#eee); padding-top:6px; margin-top:4px; }
+        .waypoints-container.visivel { display:flex; }
+        .waypoint-item { display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text2,#888); padding:2px 0; }
+        .waypoint-item i { font-size:14px; color:#ff9800; cursor:grab; }
+        .waypoint-item .wp-remover { margin-left:auto; color:#dc3545; cursor:pointer; font-size:14px; }
+        .btn-add-waypoint { background:none; border:1px dashed var(--text2,#aaa); border-radius:8px; padding:6px; font-size:0.75rem; color:var(--text2,#888); cursor:pointer; text-align:center; margin-top:4px; }
+        .btn-add-waypoint:hover { background:var(--bg2,#f5f5f5); }
+        /* HISTÓRICO */
+        .painel-historico { position:absolute; top:130px; left:20px; z-index:10; background:var(--card-bg,#fff); border-radius:16px; padding:12px 16px; box-shadow:0 4px 15px var(--shadow,rgba(0,0,0,0.15)); min-width:200px; display:none; flex-direction:column; gap:4px; max-height:60vh; overflow-y:auto; }
+        .painel-historico.visivel { display:flex; }
+        .painel-historico .hist-titulo { font-size:0.7rem; text-transform:uppercase; color:var(--text2,#888); letter-spacing:1px; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; }
+        .painel-historico .hist-item { padding:8px; border-radius:8px; cursor:pointer; font-size:0.8rem; color:var(--text,#333); background:var(--bg2,#f9f9f9); }
+        .painel-historico .hist-item:hover { background:var(--bg3,#f0f4ff); }
+        .painel-historico .hist-item .hist-dest { font-weight:600; }
+        .painel-historico .hist-item .hist-meta { font-size:0.7rem; color:var(--text2,#999); display:flex; gap:8px; }
+        .painel-historico .hist-limpar { background:none; border:none; color:#dc3545; font-size:0.7rem; cursor:pointer; padding:2px 4px; }
         @media (max-width:600px) {
             .painel-info-rota { top:130px; right:10px; left:10px; min-width:unset; }
             .painel-instrucoes { bottom:200px; max-height:35vh; }
+            .painel-veiculos { padding:14px 12px; }
+            .botao-veiculo { width:65px; padding:10px; }
+            .botao-veiculo i { font-size:24px; }
+            .botao-veiculo span { font-size:0.75rem; }
+            .painel-info-rota .info-botao { padding:6px; }
+            .painel-info-rota .info-botao i { font-size:22px; }
+            .nav-prox-distancia { font-size:1.8rem !important; padding:4px 16px !important; }
+        }
+        @media (max-width:400px) {
+            .botao-veiculo { width:55px; padding:8px; }
+            .botao-veiculo i { font-size:20px; }
+            .painel-veiculos h3 { font-size:0.85rem; }
         }
         /* NOTIFICAÇÃO DE TRÂNSITO */
         .notif-transito { position:absolute; top:180px; left:50%; transform:translateX(-50%); z-index:25; background:#fff3cd; border-left:5px solid #ff9800; color:#664d03; padding:12px 18px; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,0.18); max-width:400px; width:90%; display:none; flex-direction:column; gap:6px; animation:slideDown 0.3s ease; }
@@ -225,20 +294,29 @@
         </div>
     </div>
 
+    <!-- Seletor de Idioma -->
+    <div class="idioma-selector" style="position:absolute;top:95px;right:20px;z-index:30;display:flex;gap:4px;align-items:center;background:rgba(255,255,255,0.9);border-radius:20px;padding:4px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);font-size:0.75rem;">
+        <button style="border:none;background:transparent;cursor:pointer;font-size:1.1rem;padding:2px 4px;border-radius:50%;opacity:0.5" id="lang-pt" title="Português">🇧🇷</button>
+        <button style="border:none;background:transparent;cursor:pointer;font-size:1.1rem;padding:2px 4px;border-radius:50%;opacity:0.5" id="lang-en" title="English">🇺🇸</button>
+        <button style="border:none;background:transparent;cursor:pointer;font-size:1.1rem;padding:2px 4px;border-radius:50%;opacity:0.5" id="lang-es" title="Español">🇪🇸</button>
+    </div>
+
+    <button class="tema-toggle" onclick="toggleTema()" id="btn-tema" title="Modo escuro">🌙</button>
+
     <!-- Barra de Origem -->
     <div class="barra-origem-container">
         <div class="barra-origem" style="position:relative;">
-            <span class="origem-label">DE</span>
-            <i class="material-icons icon-origin" onclick="toggleSeletorHierarquico()" title="Selecionar estado/cidade">language</i>
+            <span class="origem-label" data-i18n="de">DE</span>
+            <i class="material-icons icon-origin" onclick="toggleSeletorHierarquico()" title="Selecionar estado/cidade" data-i18n-title="selecionarLocal">language</i>
             <input type="text" id="input-origem" placeholder="Onde você está? (ou clique no globo)" autocomplete="off">
-            <i class="material-icons icon-gps" onclick="usarGPScomoOrigem()" title="Usar minha localização">gps_fixed</i>
+            <i class="material-icons icon-gps" onclick="usarGPScomoOrigem()" title="Usar minha localização" data-i18n-title="ativarGPS">gps_fixed</i>
             <div class="seletor-hierarquico" id="seletor-hierarquico">
                 <div class="hier-niveis">
-                    <div class="hier-nivel ativo" data-nivel="pais" onclick="mudarNivel('pais')">País</div>
-                    <div class="hier-nivel" data-nivel="estado" onclick="mudarNivel('estado')">Estado</div>
+                    <div class="hier-nivel ativo" data-nivel="pais" onclick="mudarNivel('pais')" data-i18n="pais">País</div>
+                    <div class="hier-nivel" data-nivel="estado" onclick="mudarNivel('estado')" data-i18n="state">Estado</div>
                 </div>
-                <div class="hier-busca"><input type="text" id="hier-busca" placeholder="Buscar..." oninput="buscarHierarquico()"></div>
-                <div class="hier-voltar" id="hier-voltar" style="display:none;" onclick="voltarNivel()"><i class="material-icons" style="font-size:16px;">arrow_back</i> Voltar</div>
+                <div class="hier-busca"><input type="text" id="hier-busca" placeholder="Buscar..." data-i18n-placeholder="hierBuscaPlaceholder" oninput="buscarHierarquico()"></div>
+                <div class="hier-voltar" id="hier-voltar" style="display:none;" onclick="voltarNivel()"><i class="material-icons" style="font-size:16px;">arrow_back</i> <span data-i18n="voltar">Voltar</span></div>
                 <div class="hier-lista" id="hier-lista"></div>
             </div>
             <div class="sugestoes-container" id="sugestoes-origem"></div>
@@ -250,21 +328,21 @@
         <div class="barra-busca" style="position:relative;">
             <i class="material-icons icon-search" onclick="buscarEndereco()">search</i>
             <input type="text" id="input-destino" placeholder="Para onde você quer ir?" autocomplete="off">
-            <span class="recentes-tag" id="recentes-tag" onclick="mostrarRecentes()">recentes</span>
+            <span class="recentes-tag" id="recentes-tag" data-i18n="recentes" onclick="mostrarRecentes()">recentes</span>
             <div class="sugestoes-container" id="sugestoes-destino"></div>
         </div>
     </div>
 
     <!-- Painel de informações da rota -->
     <div class="painel-info-rota" id="painel-info-rota">
-        <div class="info-titulo">Rota Ativa</div>
-        <div class="info-linha"><i class="material-icons">directions</i><span>Modo: <span class="info-valor" id="info-veiculo">-</span></span></div>
-        <div class="info-linha"><i class="material-icons">straighten</i><span>Distância: <span class="info-valor" id="info-distancia">-</span></span></div>
-        <div class="info-linha"><i class="material-icons">schedule</i><span>Tempo: <span class="info-valor" id="info-tempo">-</span></span></div>
-        <div class="info-linha"><i class="material-icons">schedule</i><span>Chegada: <span class="info-valor" id="info-chegada">-</span></span></div>
-        <div class="info-linha"><i class="material-icons">local_gas_station</i><span>Custo: <span class="info-valor" id="info-custo">-</span></span></div>
-        <div class="info-linha"><i class="material-icons">speed</i><span>Vel. média: <span class="info-valor" id="info-velocidade">-</span></span></div>
-        <div class="info-linha"><i class="material-icons">location_on</i><span>Destino: <span class="info-valor" id="info-destino">-</span></span></div>
+        <div class="info-titulo" data-i18n="rotaAtiva">Rota Ativa</div>
+        <div class="info-linha"><i class="material-icons">directions</i><span data-i18n="modo">Modo:</span> <span class="info-valor" id="info-veiculo">-</span></div>
+        <div class="info-linha"><i class="material-icons">straighten</i><span data-i18n="distancia">Distância:</span> <span class="info-valor" id="info-distancia">-</span></div>
+        <div class="info-linha"><i class="material-icons">schedule</i><span data-i18n="tempo">Tempo:</span> <span class="info-valor" id="info-tempo">-</span></div>
+        <div class="info-linha"><i class="material-icons">schedule</i><span data-i18n="chegada">Chegada:</span> <span class="info-valor" id="info-chegada">-</span></div>
+        <div class="info-linha"><i class="material-icons">local_gas_station</i><span data-i18n="custo">Custo:</span> <span class="info-valor" id="info-custo">-</span></div>
+        <div class="info-linha"><i class="material-icons">speed</i><span data-i18n="velMedia">Vel. média:</span> <span class="info-valor" id="info-velocidade">-</span></div>
+        <div class="info-linha"><i class="material-icons">location_on</i><span data-i18n="destino">Destino:</span> <span class="info-valor" id="info-destino">-</span></div>
         <div class="info-viagem-pois" id="info-viagem-pois">
             <button class="poi-btn" onclick="buscarPOI('gas_station')" title="Postos de gasolina"><i class="material-icons">local_gas_station</i></button>
             <button class="poi-btn" onclick="buscarPOI('restaurant')" title="Restaurantes"><i class="material-icons">restaurant</i></button>
@@ -272,10 +350,16 @@
             <button class="poi-btn" onclick="buscarPOI('hotel')" title="Hotéis"><i class="material-icons">hotel</i></button>
             <button class="poi-btn" onclick="abrirConfigCusto()" title="Configurar custo"><i class="material-icons">tune</i></button>
         </div>
+        <div class="waypoints-container" id="waypoints-container">
+            <div id="waypoints-list"></div>
+            <button class="btn-add-waypoint" onclick="adicionarWaypoint()" data-i18n="addWaypoint">+ Adicionar parada</button>
+        </div>
         <div class="info-transito" id="info-transito"><span class="transito-icone" id="transito-icone"><i class="material-icons" style="font-size:16px;">traffic</i></span><span id="transito-status">Verificando trânsito...</span></div>
         <div class="info-acoes">
             <button class="info-botao" onclick="iniciarNavegacao()" title="Iniciar navegação"><i class="material-icons" style="color:#28a745;">navigation</i></button>
             <button class="info-botao" onclick="compartilharRota()" title="Compartilhar"><i class="material-icons">share</i></button>
+            <button class="info-botao" onclick="compartilharRotaImagem()" title="Compartilhar como imagem"><i class="material-icons">photo_camera</i></button>
+            <button class="info-botao" onclick="mostrarHistorico()" title="Histórico"><i class="material-icons">history</i></button>
             <button class="info-botao" onclick="salvarFavorito()" title="Favoritar"><i class="material-icons">star</i></button>
             <button class="info-botao" onclick="mostrarInstrucoes()" title="Direções"><i class="material-icons">list_alt</i></button>
             <button class="info-botao" onclick="abrirModalReporte()" title="Reportar incidente"><i class="material-icons">flag</i></button>
@@ -285,23 +369,23 @@
     <!-- Modal Configurar Custo -->
     <div class="modal-overlay" id="modal-config-custo">
         <div class="modal-conteudo">
-            <h3><i class="material-icons" style="font-size:20px;vertical-align:middle;">tune</i> Custo da viagem</h3>
-            <label style="font-size:0.8rem;color:#888;display:block;margin-bottom:4px;">Consumo (km/L)</label>
+            <h3><i class="material-icons" style="font-size:20px;vertical-align:middle;">tune</i> <span data-i18n="configCustoTitulo">Custo da viagem</span></h3>
+            <label style="font-size:0.8rem;color:#888;display:block;margin-bottom:4px;" data-i18n="consumoLabel">Consumo (km/L)</label>
             <input type="number" id="input-consumo" step="0.1" min="1" max="50" style="margin-bottom:8px;">
-            <label style="font-size:0.8rem;color:#888;display:block;margin-bottom:4px;">Preço do combustível (R$/L)</label>
+            <label style="font-size:0.8rem;color:#888;display:block;margin-bottom:4px;" data-i18n="precoLabel">Preço do combustível (R$/L)</label>
             <input type="number" id="input-preco-comb" step="0.01" min="0" max="20" style="margin-bottom:12px;">
             <div class="modal-acoes">
-                <button class="btn-cancelar" onclick="fecharConfigCusto()">Fechar</button>
-                <button class="btn-salvar" onclick="salvarConfigCusto()">Salvar</button>
+                <button class="btn-cancelar" onclick="fecharConfigCusto()" data-i18n="cancelar">Fechar</button>
+                <button class="btn-salvar" onclick="salvarConfigCusto()" data-i18n="salvar">Salvar</button>
             </div>
         </div>
     </div>
 
-    <button class="toggle-instrucoes-btn" id="toggle-instrucoes-btn" onclick="togglePainelInstrucoes()"><i class="material-icons" style="font-size:18px;">list_alt</i> Ver direções</button>
+    <button class="toggle-instrucoes-btn" id="toggle-instrucoes-btn" onclick="togglePainelInstrucoes()"><i class="material-icons" style="font-size:18px;">list_alt</i> <span data-i18n="alternarInstrucoes">Ver direções</span></button>
 
     <div class="painel-instrucoes" id="painel-instrucoes">
         <div class="instrucoes-header" onclick="recolherInstrucoes()">
-            <span><i class="material-icons" style="font-size:16px;vertical-align:middle;margin-right:4px;">list_alt</i> Direções</span>
+            <span><i class="material-icons" style="font-size:16px;vertical-align:middle;margin-right:4px;"></i> <span data-i18n="direcoes">Direções</span></span>
             <i class="material-icons">keyboard_arrow_down</i>
         </div>
         <div class="instrucoes-lista" id="instrucoes-lista"></div>
@@ -319,8 +403,13 @@
     </div>
 
     <div class="painel-favoritos" id="painel-favoritos">
-        <div class="fav-titulo">Favoritos</div>
+        <div class="fav-titulo" data-i18n="favoritosTitulo">Favoritos</div>
         <div id="lista-favoritos"></div>
+    </div>
+
+    <div class="painel-historico" id="painel-historico">
+        <div class="hist-titulo"><span data-i18n="historicoTitulo">Histórico</span><button class="hist-limpar" onclick="limparHistorico()" data-i18n="histLimpar">Limpar</button></div>
+        <div id="lista-historico"></div>
     </div>
 
     <!-- Notificação de Trânsito -->
@@ -358,17 +447,28 @@
         </div>
     </div>
 
+    <div class="install-banner" id="install-banner">
+        <div class="install-banner-conteudo">
+            <img class="install-banner-icon" src="icon-192.png" alt="Rotas">
+            <div class="install-banner-texto">
+                <span class="install-banner-titulo">Rotas Inteligentes</span>
+                <span class="install-banner-sub" data-i18n="instalarSub">Instale para acesso rápido e offline</span>
+            </div>
+        </div>
+        <button class="install-banner-btn" id="install-banner-btn" data-i18n="instalar">Instalar</button>
+        <button class="install-banner-fechar" id="install-banner-fechar">&times;</button>
+    </div>
     <button class="botao-toggle-mapa" onclick="trocarMapa()" title="Trocar mapa"><i class="material-icons">layers</i></button>
     <button class="botao-localizacao" onclick="centralizarLocalizacao()" title="Centralizar"><i class="material-icons">my_location</i></button>
     <button class="botao-limpar-rota" id="botao-limpar-rota" onclick="limparRota()" title="Limpar"><i class="material-icons">close</i></button>
 
     <div class="painel-veiculos">
-        <h3>Selecione seu transporte:</h3>
+        <h3 data-i18n="selecioneTransporte">Selecione seu transporte:</h3>
         <div class="lista-veiculos">
-            <div class="botao-veiculo ativo" onclick="selecionarVeiculo(this,'Carro')"><i class="material-icons">directions_car</i><span>Carro</span></div>
-            <div class="botao-veiculo" onclick="selecionarVeiculo(this,'Moto')"><i class="material-icons">two_wheeler</i><span>Moto</span></div>
-            <div class="botao-veiculo" onclick="selecionarVeiculo(this,'Bike')"><i class="material-icons">directions_bike</i><span>Bike</span></div>
-            <div class="botao-veiculo" onclick="selecionarVeiculo(this,'A pé')"><i class="material-icons">directions_walk</i><span>A pé</span></div>
+            <div class="botao-veiculo ativo" data-mode="carro" onclick="selecionarVeiculo(this,'Carro')"><i class="material-icons">directions_car</i><span data-i18n="Carro">Carro</span></div>
+            <div class="botao-veiculo" data-mode="moto" onclick="selecionarVeiculo(this,'Moto')"><i class="material-icons">two_wheeler</i><span data-i18n="Moto">Moto</span></div>
+            <div class="botao-veiculo" data-mode="bike" onclick="selecionarVeiculo(this,'Bike')"><i class="material-icons">directions_bike</i><span data-i18n="Bike">Bike</span></div>
+            <div class="botao-veiculo" data-mode="ape" onclick="selecionarVeiculo(this,'A pé')"><i class="material-icons">directions_walk</i><span data-i18n="A pé">A pé</span></div>
         </div>
     </div>
 </div>
@@ -384,22 +484,617 @@ const tiles = {
 };
 tiles.street.addTo(mapa);
 
+const MODOS = {
+    carro: { nome: 'Carro', cor: '#007bff', velocidade: null,  mult: null,        custoAjuste: 1 },
+    moto:  { nome: 'Moto',  cor: '#ff9800', velocidade: null,  mult: 0.75,        custoAjuste: 0.4 },
+    bike:  { nome: 'Bike',  cor: '#4caf50', velocidade: 12,    mult: null,        custoAjuste: 0 },
+    ape:   { nome: 'A pé',  cor: '#9c27b0', velocidade: 4,     mult: null,        custoAjuste: 0 }
+};
+
 let latOrigem = -32.095, lonOrigem = -52.180, latUsuarioGPS = null, lonUsuarioGPS = null;
 let latDestino = null, lonDestino = null;
 let marcadorOrigem = null, accuracyCircle = null, gpsRing = null, gpsWatchId = null, gpsAtivo = false;
 let marcadorDestino = null, linhaRota = null, linhasAlternativas = [];
-let veiculoAtual = 'Carro', ultimoDestinoNome = '', origemNome = '';
+let veiculoAtual = 'Carro', modoAtual = 'carro', ultimoDestinoNome = '', origemNome = '';
 let dadosRotaAtual = null, painelInstrucoesAberto = false;
 let gpsPermitido = false;
 let hierNivelAtual = 'pais', hierPai = null, hierEstadosCache = null;
 let modoMotorista = false, navegacaoTimer = null, navegacaoStepIdx = 0;
+let temaEscuro = localStorage.getItem('rotas_tema_escuro') === 'true';
+let waypoints = [];
+let _ultimoStepIdxFalado = -1;
+
+function falar(texto) {
+    if (!texto || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(texto);
+    utt.lang = idiomaAtual === 'pt' ? 'pt-BR' : idiomaAtual === 'en' ? 'en-US' : 'es-ES';
+    utt.rate = 0.9;
+    window.speechSynthesis.speak(utt);
+}
+
+// ============ SISTEMA DE IDIOMAS ============
+let idiomaAtual = navigator.language && navigator.language.startsWith('en') ? 'en' : navigator.language && navigator.language.startsWith('es') ? 'es' : 'pt';
+const TRADUCOES = {
+    pt: {
+        // App
+        appTitle: 'Rotas Inteligentes',
+        'rotas-inteligentes': 'Rotas Inteligentes',
+        // Header
+        de: 'DE',
+        origemPlaceholder: 'Onde você está? (ou clique no globo)',
+        destinoPlaceholder: 'Para onde você vai?',
+        recentes: 'recentes',
+        // Vehicle panel
+        selecioneTransporte: 'Selecione seu transporte:',
+        Carro: 'Carro',
+        Moto: 'Moto',
+        Bike: 'Bike',
+        'A pé': 'A pé',
+        // Route info panel
+        rotaAtiva: 'Rota Ativa',
+        modo: 'Modo:',
+        distancia: 'Distância:',
+        tempo: 'Tempo:',
+        chegada: 'Chegada:',
+        custo: 'Custo:',
+        velMedia: 'Vel. média:',
+        destino: 'Destino:',
+        km: 'km',
+        min: 'min',
+        h: 'h',
+        Gratis: 'Grátis',
+        verificandoTransito: 'Verificando trânsito...',
+        // Navigation
+        iniciarNavegacao: 'Iniciar navegação',
+        pararNavegacao: 'Parar navegação',
+        alternarInstrucoes: 'Instruções',
+        direcoes: 'Direções',
+        limparRota: 'Limpar rota',
+        compartilhar: 'Compartilhar',
+        favoritos: 'Favoritos',
+        configCusto: 'Configurar custo',
+        // Navigation instructions
+        sigaFrente: 'Siga em',
+        vireEsquerda: 'Vire à esquerda em',
+        vireDireita: 'Vire à direita em',
+        vireEsquerdaFechada: 'Vire à esquerda (fechada) em',
+        vireDireitaFechada: 'Vire à direita (fechada) em',
+        continueEm: 'Continue em',
+        rotatoria: 'Entre na rotatória e saia na',
+        primeiraSaida: 'primeira saída',
+        voceChegou: 'Você chegou em',
+        seuDestino: 'seu destino',
+        chegou: 'Chegou!',
+        destinoAlcancado: 'Destino alcançado!',
+        // Favorites
+        favoritosTitulo: 'Favoritos',
+        salvarFavorito: 'Salvar favorito',
+        nomeFavorito: 'Nome do favorito:',
+        cancelar: 'Cancelar',
+        salvar: 'Salvar',
+        // Cost config
+        consumoLabel: 'Consumo (km/l):',
+        precoLabel: 'Preço do combustível (R$):',
+        // Messages
+        msgDigiteDestino: 'Digite um destino!',
+        msgEnderecoNaoEncontrado: 'Endereço não encontrado.',
+        msgErroBusca: 'Erro na busca.',
+        msgErroCalcularRota: 'Erro ao calcular rota.',
+        msgNaoFoiPossivelCalcular: 'Não foi possível calcular rota.',
+        msgRotaCopiada: 'Rota copiada!',
+        msgErroCopiar: 'Erro ao copiar.',
+        msgRotaRemovida: 'Rota removida.',
+        msgFavoritoSalvo: 'Favorito salvo!',
+        msgFavoritoRemovido: 'Removido.',
+        msgCalculeRotaPrimeiro: 'Calcule uma rota primeiro.',
+        msgNenhumEncontrado: 'Nenhum encontrado.',
+        msgConfigSalva: 'Configuração salva!',
+        msgBuscandoEndereco: 'Buscando endereço...',
+        buscando: 'Buscando...',
+        msgUsandoLocalizacao: 'Usando sua localização',
+        msgGPSNaoDisponivel: 'GPS não disponível',
+        msgServidorOcupado: 'Servidor ocupado. Tente novamente.',
+        msgDestinoNaoDefinido: 'Destino não definido.',
+        instalar: 'Instalar',
+        instalarSub: 'Instale para acesso rápido e offline',
+        usarPais: 'Usar país',
+        addWaypoint: '+ Adicionar parada',
+        historicoTitulo: 'Histórico',
+        histLimpar: 'Limpar',
+        // POI
+        postosGasolina: 'Postos de gasolina',
+        restaurantes: 'Restaurantes',
+        estacionamento: 'Estacionamento',
+        hoteis: 'Hotéis',
+        // Place types
+        city: 'cidade',
+        town: 'cidade',
+        village: 'vila',
+        hamlet: 'povoado',
+        municipality: 'município',
+        state: 'estado',
+        country: 'país',
+        hotel: 'hotel',
+        restaurant: 'restaurante',
+        gas_station: 'posto',
+        parking: 'estacionamento',
+        local: 'local',
+        // Countries for PAISES_POPULARES
+        Brasil: 'Brasil',
+        Argentina: 'Argentina',
+        'Estados Unidos': 'Estados Unidos',
+        Portugal: 'Portugal',
+        Espanha: 'Espanha',
+        França: 'França',
+        Itália: 'Itália',
+        Alemanha: 'Alemanha',
+        'Reino Unido': 'Reino Unido',
+        Japão: 'Japão',
+        // Transit zones
+        transitoIntenso: 'Trânsito intenso no centro comercial',
+        transitoModerado: 'Trânsito moderado na avenida principal',
+        transitoPonte: 'Trânsito no acesso à ponte',
+        obrasPortuarias: 'Obras na via portuária',
+        transitoBeiraMar: 'Trânsito na avenida beira-mar',
+        // Cost
+        configCustoTitulo: 'Configurar Custo',
+        consumo: 'Consumo (km/l)',
+        precoCombustivel: 'Preço do combustível (R$/L)',
+        // ETA
+        eta: 'Chegada prevista:',
+        // Alternative routes
+        rotaAlternativa: 'rota alternativa',
+        // GPS
+        ativarGPS: 'Ativar GPS',
+        desativarGPS: 'Desativar GPS',
+        // Language
+        idioma: 'Idioma',
+        pais: 'País',
+        voltar: 'Voltar',
+        buscarOutroPais: 'Buscar outro país...',
+        carregandoEstados: 'Carregando estados...',
+        selecionePaisPrimeiro: 'Selecione um país primeiro na aba "País".',
+        hierBuscaPlaceholder: 'Buscar...',
+        selecionarLocal: 'Selecionar estado/cidade',
+    },
+    en: {
+        appTitle: 'Smart Routes',
+        'rotas-inteligentes': 'Smart Routes',
+        de: 'FROM',
+        origemPlaceholder: 'Where are you? (or click the globe)',
+        destinoPlaceholder: 'Where are you going?',
+        recentes: 'recent',
+        selecioneTransporte: 'Select your transport:',
+        Carro: 'Car',
+        Moto: 'Motorcycle',
+        Bike: 'Bike',
+        'A pé': 'Walking',
+        rotaAtiva: 'Active Route',
+        modo: 'Mode:',
+        distancia: 'Distance:',
+        tempo: 'Time:',
+        chegada: 'Arrival:',
+        custo: 'Cost:',
+        velMedia: 'Avg. speed:',
+        destino: 'Destination:',
+        km: 'km',
+        min: 'min',
+        h: 'h',
+        Gratis: 'Free',
+        verificandoTransito: 'Checking traffic...',
+        iniciarNavegacao: 'Start navigation',
+        pararNavegacao: 'Stop navigation',
+        alternarInstrucoes: 'Instructions',
+        direcoes: 'Directions',
+        limparRota: 'Clear route',
+        compartilhar: 'Share',
+        favoritos: 'Favorites',
+        configCusto: 'Cost settings',
+        sigaFrente: 'Go straight on',
+        vireEsquerda: 'Turn left on',
+        vireDireita: 'Turn right on',
+        vireEsquerdaFechada: 'Sharp left on',
+        vireDireitaFechada: 'Sharp right on',
+        continueEm: 'Continue on',
+        rotatoria: 'Enter the roundabout and take the',
+        primeiraSaida: 'first exit',
+        voceChegou: 'You have arrived at',
+        seuDestino: 'your destination',
+        chegou: 'Arrived!',
+        destinoAlcancado: 'Destination reached!',
+        favoritosTitulo: 'Favorites',
+        salvarFavorito: 'Save favorite',
+        nomeFavorito: 'Favorite name:',
+        cancelar: 'Cancel',
+        salvar: 'Save',
+        consumoLabel: 'Consumption (km/l):',
+        precoLabel: 'Fuel price ($):',
+        msgDigiteDestino: 'Enter a destination!',
+        msgEnderecoNaoEncontrado: 'Address not found.',
+        msgErroBusca: 'Search error.',
+        msgErroCalcularRota: 'Error calculating route.',
+        msgNaoFoiPossivelCalcular: 'Could not calculate route.',
+        msgRotaCopiada: 'Route copied!',
+        msgErroCopiar: 'Error copying.',
+        msgRotaRemovida: 'Route removed.',
+        msgFavoritoSalvo: 'Favorite saved!',
+        msgFavoritoRemovido: 'Removed.',
+        msgCalculeRotaPrimeiro: 'Calculate a route first.',
+        msgNenhumEncontrado: 'None found.',
+        msgConfigSalva: 'Settings saved!',
+        msgBuscandoEndereco: 'Searching address...',
+        buscando: 'Searching...',
+        msgUsandoLocalizacao: 'Using your location',
+        msgGPSNaoDisponivel: 'GPS not available',
+        msgServidorOcupado: 'Server busy. Try again.',
+        msgDestinoNaoDefinido: 'Destination not defined.',
+        instalar: 'Install',
+        instalarSub: 'Install for quick & offline access',
+        usarPais: 'Use country',
+        addWaypoint: '+ Add stop',
+        historicoTitulo: 'History',
+        histLimpar: 'Clear',
+        postosGasolina: 'Gas stations',
+        restaurantes: 'Restaurants',
+        estacionamento: 'Parking',
+        hoteis: 'Hotels',
+        city: 'city',
+        town: 'town',
+        village: 'village',
+        hamlet: 'hamlet',
+        municipality: 'municipality',
+        state: 'state',
+        country: 'country',
+        hotel: 'hotel',
+        restaurant: 'restaurant',
+        gas_station: 'gas station',
+        parking: 'parking',
+        local: 'local',
+        Brasil: 'Brazil',
+        Argentina: 'Argentina',
+        'Estados Unidos': 'United States',
+        Portugal: 'Portugal',
+        Espanha: 'Spain',
+        França: 'France',
+        Itália: 'Italy',
+        Alemanha: 'Germany',
+        'Reino Unido': 'United Kingdom',
+        Japão: 'Japan',
+        // Novos países
+        Chile: 'Chile',
+        Colômbia: 'Colombia',
+        Peru: 'Peru',
+        Venezuela: 'Venezuela',
+        Uruguai: 'Uruguay',
+        Paraguai: 'Paraguay',
+        Equador: 'Ecuador',
+        Bolívia: 'Bolivia',
+        Canadá: 'Canada',
+        México: 'Mexico',
+        Cuba: 'Cuba',
+        'Países Baixos': 'Netherlands',
+        Suíça: 'Switzerland',
+        Suécia: 'Sweden',
+        Noruega: 'Norway',
+        Bélgica: 'Belgium',
+        Áustria: 'Austria',
+        Irlanda: 'Ireland',
+        'África do Sul': 'South Africa',
+        Egito: 'Egypt',
+        Nigéria: 'Nigeria',
+        Quênia: 'Kenya',
+        Marrocos: 'Morocco',
+        Angola: 'Angola',
+        Moçambique: 'Mozambique',
+        China: 'China',
+        Índia: 'India',
+        'Coreia do Sul': 'South Korea',
+        Rússia: 'Russia',
+        Turquia: 'Turkey',
+        Tailândia: 'Thailand',
+        Indonésia: 'Indonesia',
+        Austrália: 'Australia',
+        'Nova Zelândia': 'New Zealand',
+        transitoIntenso: 'Heavy traffic in downtown',
+        transitoModerado: 'Moderate traffic on main avenue',
+        transitoPonte: 'Traffic at bridge access',
+        obrasPortuarias: 'Construction at port area',
+        transitoBeiraMar: 'Traffic on seaside avenue',
+        configCustoTitulo: 'Cost Settings',
+        consumo: 'Consumption (km/l)',
+        precoCombustivel: 'Fuel price ($/L)',
+        eta: 'Estimated arrival:',
+        rotaAlternativa: 'alternative route',
+        ativarGPS: 'Enable GPS',
+        desativarGPS: 'Disable GPS',
+        idioma: 'Language',
+        pais: 'Country',
+        voltar: 'Back',
+        buscarOutroPais: 'Search another country...',
+        carregandoEstados: 'Loading states...',
+        selecionePaisPrimeiro: 'Select a country first in the "Country" tab.',
+        hierBuscaPlaceholder: 'Search...',
+        selecionarLocal: 'Select state/city',
+    },
+    es: {
+        appTitle: 'Rutas Inteligentes',
+        'rotas-inteligentes': 'Rutas Inteligentes',
+        de: 'DESDE',
+        origemPlaceholder: '¿Dónde estás? (o haz clic en el globo)',
+        destinoPlaceholder: '¿A dónde vas?',
+        recentes: 'recientes',
+        selecioneTransporte: 'Selecciona tu transporte:',
+        Carro: 'Coche',
+        Moto: 'Moto',
+        Bike: 'Bici',
+        'A pé': 'A pie',
+        rotaAtiva: 'Ruta Activa',
+        modo: 'Modo:',
+        distancia: 'Distancia:',
+        tempo: 'Tiempo:',
+        chegada: 'Llegada:',
+        custo: 'Coste:',
+        velMedia: 'Vel. media:',
+        destino: 'Destino:',
+        km: 'km',
+        min: 'min',
+        h: 'h',
+        Gratis: 'Gratis',
+        verificandoTransito: 'Verificando tráfico...',
+        iniciarNavegacao: 'Iniciar navegación',
+        pararNavegacao: 'Detener navegación',
+        alternarInstrucoes: 'Instrucciones',
+        direcoes: 'Direcciones',
+        limparRota: 'Limpiar ruta',
+        compartilhar: 'Compartir',
+        favoritos: 'Favoritos',
+        configCusto: 'Configurar coste',
+        sigaFrente: 'Siga recto en',
+        vireEsquerda: 'Gire a la izquierda en',
+        vireDireita: 'Gire a la derecha en',
+        vireEsquerdaFechada: 'Gire a la izquierda (cerrada) en',
+        vireDireitaFechada: 'Gire a la derecha (cerrada) en',
+        continueEm: 'Continúe en',
+        rotatoria: 'Entre en la rotonda y tome la',
+        primeiraSaida: 'primera salida',
+        voceChegou: 'Ha llegado a',
+        seuDestino: 'su destino',
+        chegou: '¡Llegó!',
+        destinoAlcancado: '¡Destino alcanzado!',
+        favoritosTitulo: 'Favoritos',
+        salvarFavorito: 'Guardar favorito',
+        nomeFavorito: 'Nombre del favorito:',
+        cancelar: 'Cancelar',
+        salvar: 'Guardar',
+        consumoLabel: 'Consumo (km/l):',
+        precoLabel: 'Precio del combustible (€):',
+        msgDigiteDestino: '¡Escribe un destino!',
+        msgEnderecoNaoEncontrado: 'Dirección no encontrada.',
+        msgErroBusca: 'Error en la búsqueda.',
+        msgErroCalcularRota: 'Error al calcular la ruta.',
+        msgNaoFoiPossivelCalcular: 'No se pudo calcular la ruta.',
+        msgRotaCopiada: '¡Ruta copiada!',
+        msgErroCopiar: 'Error al copiar.',
+        msgRotaRemovida: 'Ruta eliminada.',
+        msgFavoritoSalvo: '¡Favorito guardado!',
+        msgFavoritoRemovido: 'Eliminado.',
+        msgCalculeRotaPrimeiro: 'Calcula una ruta primero.',
+        msgNenhumEncontrado: 'Ninguno encontrado.',
+        msgConfigSalva: '¡Configuración guardada!',
+        msgBuscandoEndereco: 'Buscando dirección...',
+        buscando: 'Buscando...',
+        msgUsandoLocalizacao: 'Usando tu ubicación',
+        msgGPSNaoDisponivel: 'GPS no disponible',
+        msgServidorOcupado: 'Servidor ocupado. Intenta de nuevo.',
+        msgDestinoNaoDefinido: 'Destino no definido.',
+        instalar: 'Instalar',
+        instalarSub: 'Instala para acceso rápido y sin conexión',
+        usarPais: 'Usar país',
+        addWaypoint: '+ Agregar parada',
+        historicoTitulo: 'Historial',
+        histLimpar: 'Limpiar',
+        postosGasolina: 'Gasolineras',
+        restaurantes: 'Restaurantes',
+        estacionamento: 'Estacionamiento',
+        hoteis: 'Hoteles',
+        city: 'ciudad',
+        town: 'pueblo',
+        village: 'aldea',
+        hamlet: 'caserío',
+        municipality: 'municipio',
+        state: 'estado',
+        country: 'país',
+        hotel: 'hotel',
+        restaurant: 'restaurante',
+        gas_station: 'gasolinera',
+        parking: 'estacionamiento',
+        local: 'local',
+        Brasil: 'Brasil',
+        Argentina: 'Argentina',
+        'Estados Unidos': 'Estados Unidos',
+        Portugal: 'Portugal',
+        Espanha: 'España',
+        França: 'Francia',
+        Itália: 'Italia',
+        Alemanha: 'Alemania',
+        'Reino Unido': 'Reino Unido',
+        Japão: 'Japón',
+        // Novos países
+        Chile: 'Chile',
+        Colômbia: 'Colombia',
+        Peru: 'Perú',
+        Venezuela: 'Venezuela',
+        Uruguai: 'Uruguay',
+        Paraguai: 'Paraguay',
+        Equador: 'Ecuador',
+        Bolívia: 'Bolivia',
+        Canadá: 'Canadá',
+        México: 'México',
+        Cuba: 'Cuba',
+        'Países Baixos': 'Países Bajos',
+        Suíça: 'Suiza',
+        Suécia: 'Suecia',
+        Noruega: 'Noruega',
+        Bélgica: 'Bélgica',
+        Áustria: 'Austria',
+        Irlanda: 'Irlanda',
+        'África do Sul': 'Sudáfrica',
+        Egito: 'Egipto',
+        Nigéria: 'Nigeria',
+        Quênia: 'Kenia',
+        Marrocos: 'Marruecos',
+        Angola: 'Angola',
+        Moçambique: 'Mozambique',
+        China: 'China',
+        Índia: 'India',
+        'Coreia do Sul': 'Corea del Sur',
+        Rússia: 'Rusia',
+        Turquia: 'Turquía',
+        Tailândia: 'Tailandia',
+        Indonésia: 'Indonesia',
+        Austrália: 'Australia',
+        'Nova Zelândia': 'Nueva Zelanda',
+        transitoIntenso: 'Tráfico intenso en el centro',
+        transitoModerado: 'Tráfico moderado en la avenida principal',
+        transitoPonte: 'Tráfico en el acceso al puente',
+        obrasPortuarias: 'Obras en la vía portuaria',
+        transitoBeiraMar: 'Tráfico en la avenida costanera',
+        configCustoTitulo: 'Configurar Coste',
+        consumo: 'Consumo (km/l)',
+        precoCombustivel: 'Precio del combustible (€/L)',
+        eta: 'Llegada prevista:',
+        rotaAlternativa: 'ruta alternativa',
+        ativarGPS: 'Activar GPS',
+        desativarGPS: 'Desactivar GPS',
+        idioma: 'Idioma',
+        pais: 'País',
+        voltar: 'Volver',
+        buscarOutroPais: 'Buscar otro país...',
+        carregandoEstados: 'Cargando estados...',
+        selecionePaisPrimeiro: 'Selecciona un país primero en la pestaña "País".',
+        hierBuscaPlaceholder: 'Buscar...',
+        selecionarLocal: 'Seleccionar estado/ciudad',
+    }
+};
+
+function t(chave) {
+    const lang = TRADUCOES[idiomaAtual];
+    return (lang && lang[chave] !== undefined) ? lang[chave] : (TRADUCOES.pt[chave] !== undefined ? TRADUCOES.pt[chave] : chave);
+}
+
+function aplicarIdioma() {
+    document.title = t('appTitle');
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const chave = el.getAttribute('data-i18n');
+        const trad = t(chave);
+        if (el.tagName === 'INPUT' && el.hasAttribute('placeholder')) {
+            el.setAttribute('placeholder', trad);
+        } else {
+            el.textContent = trad;
+        }
+    });
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const chave = el.getAttribute('data-i18n-title');
+        el.setAttribute('title', t(chave));
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const chave = el.getAttribute('data-i18n-placeholder');
+        el.setAttribute('placeholder', t(chave));
+    });
+    // Atualiza placeholders específicos
+    const inpOrigem = document.getElementById('input-origem');
+    if (inpOrigem) inpOrigem.setAttribute('placeholder', t('origemPlaceholder'));
+    const inpDestino = document.getElementById('input-destino');
+    if (inpDestino) inpDestino.setAttribute('placeholder', t('destinoPlaceholder'));
+    // Atualiza flags de idioma
+    document.querySelectorAll('[id^="lang-"]').forEach(el => {
+        const langCode = el.id.replace('lang-', '');
+        el.style.opacity = (langCode === idiomaAtual) ? '1' : '0.5';
+    });
+}
+
+function mudarIdioma(idioma) {
+    idiomaAtual = idioma;
+    aplicarIdioma();
+    if (typeof carregarPaises === 'function') carregarPaises();
+    if (typeof atualizarFavoritos === 'function') atualizarFavoritos();
+    document.querySelectorAll('[id^="lang-"]').forEach(el => {
+        el.style.opacity = (el.id.replace('lang-', '') === idioma) ? '1' : '0.5';
+    });
+    const nomes = { pt: 'Português', en: 'English', es: 'Español' };
+    mostrarToast(`${nomes[idioma] || idioma}`, 'sucesso', 1500);
+}
+const CONTINENTES = {
+    'america-sul':  { nome: 'América do Sul',  nomeEn: 'South America',  nomeEs: 'América del Sur' },
+    'america-norte': { nome: 'América do Norte', nomeEn: 'North America', nomeEs: 'América del Norte' },
+    'europa':        { nome: 'Europa',          nomeEn: 'Europe',        nomeEs: 'Europa' },
+    'africa':        { nome: 'África',          nomeEn: 'Africa',        nomeEs: 'África' },
+    'asia':          { nome: 'Ásia',            nomeEn: 'Asia',          nomeEs: 'Asia' },
+    'oceania':       { nome: 'Oceania',         nomeEn: 'Oceania',       nomeEs: 'Oceanía' }
+};
+
+function nomeContinente(chave) {
+    const c = CONTINENTES[chave];
+    if (!c) return chave;
+    const lang = { pt: 'nome', en: 'nomeEn', es: 'nomeEs' }[idiomaAtual] || 'nome';
+    return c[lang] || c.nome;
+}
+
 const PAISES_POPULARES = [
-    { nome: 'Brasil', code: 'br', wid: 'Q155' }, { nome: 'Argentina', code: 'ar', wid: 'Q414' },
-    { nome: 'Estados Unidos', code: 'us', wid: 'Q30' }, { nome: 'Portugal', code: 'pt', wid: 'Q45' },
-    { nome: 'Espanha', code: 'es', wid: 'Q29' }, { nome: 'França', code: 'fr', wid: 'Q142' },
-    { nome: 'Itália', code: 'it', wid: 'Q38' }, { nome: 'Alemanha', code: 'de', wid: 'Q183' },
-    { nome: 'Reino Unido', code: 'gb', wid: 'Q145' }, { nome: 'Japão', code: 'jp', wid: 'Q17' }
+    // América do Sul
+    { continente: 'america-sul',  nome: 'Brasil', code: 'br', wid: 'Q155' },
+    { continente: 'america-sul',  nome: 'Argentina', code: 'ar', wid: 'Q414' },
+    { continente: 'america-sul',  nome: 'Chile', code: 'cl', wid: 'Q298' },
+    { continente: 'america-sul',  nome: 'Colômbia', code: 'co', wid: 'Q739' },
+    { continente: 'america-sul',  nome: 'Peru', code: 'pe', wid: 'Q419' },
+    { continente: 'america-sul',  nome: 'Venezuela', code: 've', wid: 'Q717' },
+    { continente: 'america-sul',  nome: 'Uruguai', code: 'uy', wid: 'Q77' },
+    { continente: 'america-sul',  nome: 'Paraguai', code: 'py', wid: 'Q733' },
+    { continente: 'america-sul',  nome: 'Equador', code: 'ec', wid: 'Q736' },
+    { continente: 'america-sul',  nome: 'Bolívia', code: 'bo', wid: 'Q750' },
+    // América do Norte
+    { continente: 'america-norte', nome: 'Estados Unidos', code: 'us', wid: 'Q30' },
+    { continente: 'america-norte', nome: 'Canadá', code: 'ca', wid: 'Q16' },
+    { continente: 'america-norte', nome: 'México', code: 'mx', wid: 'Q96' },
+    { continente: 'america-norte', nome: 'Cuba', code: 'cu', wid: 'Q241' },
+    // Europa
+    { continente: 'europa', nome: 'Portugal', code: 'pt', wid: 'Q45' },
+    { continente: 'europa', nome: 'Espanha', code: 'es', wid: 'Q29' },
+    { continente: 'europa', nome: 'França', code: 'fr', wid: 'Q142' },
+    { continente: 'europa', nome: 'Itália', code: 'it', wid: 'Q38' },
+    { continente: 'europa', nome: 'Alemanha', code: 'de', wid: 'Q183' },
+    { continente: 'europa', nome: 'Reino Unido', code: 'gb', wid: 'Q145' },
+    { continente: 'europa', nome: 'Países Baixos', code: 'nl', wid: 'Q55' },
+    { continente: 'europa', nome: 'Suíça', code: 'ch', wid: 'Q39' },
+    { continente: 'europa', nome: 'Suécia', code: 'se', wid: 'Q34' },
+    { continente: 'europa', nome: 'Noruega', code: 'no', wid: 'Q20' },
+    { continente: 'europa', nome: 'Bélgica', code: 'be', wid: 'Q31' },
+    { continente: 'europa', nome: 'Áustria', code: 'at', wid: 'Q40' },
+    { continente: 'europa', nome: 'Irlanda', code: 'ie', wid: 'Q27' },
+    // África
+    { continente: 'africa', nome: 'África do Sul', code: 'za', wid: 'Q258' },
+    { continente: 'africa', nome: 'Egito', code: 'eg', wid: 'Q79' },
+    { continente: 'africa', nome: 'Nigéria', code: 'ng', wid: 'Q1033' },
+    { continente: 'africa', nome: 'Quênia', code: 'ke', wid: 'Q114' },
+    { continente: 'africa', nome: 'Marrocos', code: 'ma', wid: 'Q1028' },
+    { continente: 'africa', nome: 'Angola', code: 'ao', wid: 'Q916' },
+    { continente: 'africa', nome: 'Moçambique', code: 'mz', wid: 'Q1029' },
+    // Ásia
+    { continente: 'asia', nome: 'Japão', code: 'jp', wid: 'Q17' },
+    { continente: 'asia', nome: 'China', code: 'cn', wid: 'Q148' },
+    { continente: 'asia', nome: 'Índia', code: 'in', wid: 'Q668' },
+    { continente: 'asia', nome: 'Coreia do Sul', code: 'kr', wid: 'Q423' },
+    { continente: 'asia', nome: 'Rússia', code: 'ru', wid: 'Q159' },
+    { continente: 'asia', nome: 'Turquia', code: 'tr', wid: 'Q43' },
+    { continente: 'asia', nome: 'Tailândia', code: 'th', wid: 'Q869' },
+    { continente: 'asia', nome: 'Indonésia', code: 'id', wid: 'Q252' },
+    // Oceania
+    { continente: 'oceania', nome: 'Austrália', code: 'au', wid: 'Q408' },
+    { continente: 'oceania', nome: 'Nova Zelândia', code: 'nz', wid: 'Q664' }
 ];
+
+function nomePais(pais) { return t(pais.nome) || pais.nome; }
 
 // Estados/regiões dos países populares (hardcoded para confiabilidade)
 const ESTADOS_POR_PAIS = {
@@ -543,6 +1238,171 @@ const ESTADOS_POR_PAIS = {
         ["43","Kumamoto","130.73","32.72"],["44","Oita","131.50","33.28"],
         ["45","Miyazaki","131.41","31.91"],["46","Kagoshima","130.56","31.47"],
         ["47","Okinawa","127.68","26.33"]
+    ],
+    // Chile
+    Q298: [
+        ["CL-AP","Arica e Parinacota","-69.80","-18.48"],["CL-TA","Tarapacá","-69.57","-20.28"],
+        ["CL-AN","Antofagasta","-69.59","-23.65"],["CL-AT","Atacama","-70.25","-27.37"],
+        ["CL-CO","Coquimbo","-71.00","-30.57"],["CL-VS","Valparaíso","-71.30","-33.05"],
+        ["CL-RM","Santiago","-70.65","-33.45"],["CL-LI","Libertador General Bernardo O'Higgins","-70.72","-34.38"],
+        ["CL-ML","Maule","-71.30","-35.55"],["CL-NB","Ñuble","-71.95","-36.62"],
+        ["CL-BI","Biobío","-72.35","-36.85"],["CL-AR","Araucanía","-72.45","-38.50"],
+        ["CL-LR","Los Ríos","-72.70","-39.80"],["CL-LL","Los Lagos","-72.90","-41.50"],
+        ["CL-AI","Aysén","-73.00","-46.50"],["CL-MA","Magalhães","-72.00","-53.15"]
+    ],
+    // Colômbia
+    Q739: [
+        ["CO-AMA","Amazonas","-70.50","-3.50"],["CO-ANT","Antioquia","-75.50","6.50"],
+        ["CO-ARA","Arauca","-70.50","6.50"],["CO-ATL","Atlántico","-74.80","10.90"],
+        ["CO-BOL","Bolívar","-74.00","9.50"],["CO-BOY","Boyacá","-73.00","5.50"],
+        ["CO-CAL","Caldas","-75.50","5.20"],["CO-CAQ","Caquetá","-74.00","1.50"],
+        ["CO-CAS","Casanare","-72.00","5.50"],["CO-CAU","Cauca","-76.50","2.50"],
+        ["CO-CES","Cesar","-73.50","9.50"],["CO-CHO","Chocó","-77.00","6.00"],
+        ["CO-COR","Córdoba","-76.00","8.50"],["CO-CUN","Cundinamarca","-74.00","4.50"],
+        ["CO-GUA","Guainía","-69.00","3.00"],["CO-GUV","Guaviare","-72.00","2.00"],
+        ["CO-HUI","Huila","-75.50","2.50"],["CO-LAG","La Guajira","-72.50","11.00"],
+        ["CO-MAG","Magdalena","-74.50","10.00"],["CO-MET","Meta","-73.00","3.50"],
+        ["CO-NAR","Nariño","-77.50","1.50"],["CO-NSA","Norte de Santander","-72.50","8.00"],
+        ["CO-PUT","Putumayo","-76.00","0.50"],["CO-QUI","Quindío","-75.60","4.50"],
+        ["CO-RIS","Risaralda","-75.80","5.00"],["CO-SAP","San Andrés e Providência","-81.70","12.50"],
+        ["CO-SAN","Santander","-73.50","6.50"],["CO-SUC","Sucre","-75.50","9.00"],
+        ["CO-TOL","Tolima","-75.00","4.00"],["CO-VAC","Valle del Cauca","-76.50","3.50"],
+        ["CO-VAU","Vaupés","-70.50","0.50"],["CO-VID","Vichada","-69.00","5.00"]
+    ],
+    // Peru
+    Q419: [
+        ["PE-AMA","Amazonas","-78.00","-5.50"],["PE-ANC","Áncash","-77.50","-9.00"],
+        ["PE-APU","Apurímac","-73.00","-14.00"],["PE-ARE","Arequipa","-72.00","-16.00"],
+        ["PE-AYA","Ayacucho","-74.00","-14.00"],["PE-CAJ","Cajamarca","-78.50","-7.00"],
+        ["PE-CUS","Cusco","-72.00","-13.50"],["PE-HUV","Huancavelica","-75.00","-13.00"],
+        ["PE-HUC","Huánuco","-76.00","-9.50"],["PE-ICA","Ica","-75.50","-14.50"],
+        ["PE-JUN","Junín","-75.50","-11.50"],["PE-LAL","La Libertad","-78.50","-8.00"],
+        ["PE-LAM","Lambayeque","-79.50","-6.50"],["PE-LIM","Lima","-77.00","-12.00"],
+        ["PE-LOR","Loreto","-74.00","-4.00"],["PE-MDD","Madre de Dios","-70.00","-12.00"],
+        ["PE-MOQ","Moquegua","-71.00","-17.00"],["PE-PAS","Pasco","-76.00","-10.50"],
+        ["PE-PIU","Piura","-80.50","-5.00"],["PE-PUN","Puno","-70.00","-15.50"],
+        ["PE-SAM","San Martín","-77.00","-7.00"],["PE-TAC","Tacna","-70.50","-18.00"],
+        ["PE-TUM","Tumbes","-80.50","-3.50"],["PE-UCA","Ucayali","-74.00","-9.50"]
+    ],
+    // Venezuela
+    Q717: [
+        ["VE-A","Distrito Capital","-66.92","10.50"],["VE-B","Anzoátegui","-64.50","9.00"],
+        ["VE-C","Apure","-69.00","7.00"],["VE-D","Aragua","-67.50","10.00"],
+        ["VE-E","Barinas","-70.00","8.00"],["VE-F","Bolívar","-63.00","6.50"],
+        ["VE-G","Carabobo","-68.00","10.00"],["VE-H","Cojedes","-68.50","9.50"],
+        ["VE-I","Falcón","-69.50","11.00"],["VE-J","Guárico","-67.00","8.50"],
+        ["VE-K","Lara","-69.50","10.00"],["VE-L","Mérida","-71.00","8.50"],
+        ["VE-M","Miranda","-66.50","10.50"],["VE-N","Monagas","-63.00","9.50"],
+        ["VE-O","Nueva Esparta","-64.00","11.00"],["VE-P","Portuguesa","-69.00","9.00"],
+        ["VE-R","Sucre","-63.00","10.50"],["VE-S","Táchira","-72.00","7.50"],
+        ["VE-T","Trujillo","-70.50","9.50"],["VE-U","Yaracuy","-68.50","10.00"],
+        ["VE-V","Zulia","-72.00","10.00"],["VE-W","Dependencias Federales","-66.00","11.00"]
+    ],
+    // Uruguai
+    Q77: [
+        ["UY-AR","Artigas","-56.50","-30.50"],["UY-CA","Canelones","-56.00","-34.50"],
+        ["UY-CL","Cerro Largo","-54.00","-32.50"],["UY-CO","Colonia","-57.50","-34.50"],
+        ["UY-DU","Durazno","-56.00","-33.50"],["UY-FS","Flores","-56.50","-33.50"],
+        ["UY-FD","Florida","-56.00","-34.00"],["UY-LA","Lavalleja","-55.00","-33.50"],
+        ["UY-MA","Maldonado","-55.00","-34.50"],["UY-MO","Montevidéu","-56.20","-34.90"],
+        ["UY-PA","Paysandú","-57.50","-32.00"],["UY-RN","Río Negro","-57.00","-32.50"],
+        ["UY-RO","Rivera","-55.50","-31.00"],["UY-RO","Rocha","-54.00","-34.00"],
+        ["UY-SA","Salto","-57.00","-31.50"],["UY-SJ","San José","-56.50","-34.50"],
+        ["UY-SO","Soriano","-57.50","-33.50"],["UY-TA","Tacuarembó","-56.00","-32.00"],
+        ["UY-TT","Treinta y Tres","-54.50","-33.50"]
+    ],
+    // Canadá
+    Q16: [
+        ["CA-AB","Alberta","-115.00","53.00"],["CA-BC","Colúmbia Britânica","-125.00","53.00"],
+        ["CA-MB","Manitoba","-99.00","55.00"],["CA-NB","Nova Brunswick","-66.00","46.00"],
+        ["CA-NL","Terra Nova e Labrador","-60.00","50.00"],["CA-NS","Nova Escócia","-63.00","45.00"],
+        ["CA-ON","Ontário","-85.00","50.00"],["CA-PE","Ilha do Príncipe Eduardo","-63.50","46.50"],
+        ["CA-QC","Quebec","-73.00","52.00"],["CA-SK","Saskatchewan","-106.00","55.00"],
+        ["CA-NT","Territórios do Noroeste","-115.00","65.00"],["CA-NU","Nunavut","-95.00","70.00"],
+        ["CA-YT","Yukon","-135.00","63.00"]
+    ],
+    // México
+    Q96: [
+        ["MX-AGU","Aguascalientes","-102.30","21.88"],["MX-BCN","Baja California","-115.00","31.00"],
+        ["MX-BCS","Baja California Sur","-112.00","25.00"],["MX-CAM","Campeche","-90.00","19.00"],
+        ["MX-CHP","Chiapas","-93.00","16.00"],["MX-CHH","Chihuahua","-106.00","28.00"],
+        ["MX-CMX","Cidade do México","-99.13","19.43"],["MX-COA","Coahuila","-102.00","27.00"],
+        ["MX-COL","Colima","-104.00","19.00"],["MX-DUR","Durango","-105.00","25.00"],
+        ["MX-GUA","Guanajuato","-101.00","21.00"],["MX-GRO","Guerrero","-100.00","17.50"],
+        ["MX-HID","Hidalgo","-99.00","20.50"],["MX-JAL","Jalisco","-104.00","20.50"],
+        ["MX-MEX","Estado do México","-99.50","19.50"],["MX-MIC","Michoacán","-102.00","19.00"],
+        ["MX-MOR","Morelos","-99.00","18.80"],["MX-NAY","Nayarit","-105.00","22.00"],
+        ["MX-NLE","Nuevo León","-100.00","25.50"],["MX-OAX","Oaxaca","-96.50","17.00"],
+        ["MX-PUE","Puebla","-98.00","19.00"],["MX-QUE","Querétaro","-100.00","20.50"],
+        ["MX-ROO","Quintana Roo","-88.00","19.50"],["MX-SLP","San Luis Potosí","-101.00","22.50"],
+        ["MX-SIN","Sinaloa","-107.50","25.00"],["MX-SON","Sonora","-111.00","29.50"],
+        ["MX-TAB","Tabasco","-93.00","18.00"],["MX-TAM","Tamaulipas","-99.00","24.50"],
+        ["MX-TLA","Tlaxcala","-98.00","19.50"],["MX-VER","Veracruz","-96.50","19.50"],
+        ["MX-YUC","Yucatán","-89.00","20.50"],["MX-ZAC","Zacatecas","-103.00","23.00"]
+    ],
+    // Cuba
+    Q241: [
+        ["CU-ART","Artemisa","-82.75","22.82"],["CU-CAM","Camagüey","-77.92","21.38"],
+        ["CU-CAV","Ciego de Ávila","-78.76","21.85"],["CU-CFG","Cienfuegos","-80.44","22.15"],
+        ["CU-GRA","Granma","-76.95","20.38"],["CU-GUA","Guantánamo","-75.21","20.14"],
+        ["CU-HOL","Holguín","-75.72","20.89"],["CU-LT","Isla de la Juventud","-82.95","21.75"],
+        ["CU-ART","La Habana","-82.37","23.13"],["CU-LAS","Las Tunas","-76.95","20.97"],
+        ["CU-MAT","Matanzas","-81.56","23.04"],["CU-MAY","Mayabeque","-81.94","22.82"],
+        ["CU-PRI","Pinar del Río","-83.70","22.42"],["CU-SC","Santiago de Cuba","-75.82","20.02"],
+        ["CU-VCL","Villa Clara","-79.98","22.41"]
+    ],
+    // China
+    Q148: [
+        ["CN-AH","Anhui","117.00","31.00"],["CN-FJ","Fujian","118.00","26.00"],
+        ["CN-GS","Gansu","103.00","36.00"],["CN-GD","Guangdong","113.00","23.00"],
+        ["CN-GZ","Guizhou","106.00","27.00"],["CN-HI","Hainan","110.00","19.00"],
+        ["CN-HE","Hebei","114.00","38.00"],["CN-HL","Heilongjiang","127.00","47.00"],
+        ["CN-HA","Henan","113.00","34.00"],["CN-HB","Hubei","112.00","31.00"],
+        ["CN-HN","Hunan","112.00","28.00"],["CN-JS","Jiangsu","119.00","32.50"],
+        ["CN-JX","Jiangxi","116.00","27.50"],["CN-JL","Jilin","126.00","43.50"],
+        ["CN-LN","Liaoning","123.00","41.00"],["CN-QH","Qinghai","96.00","36.00"],
+        ["CN-SN","Shaanxi","109.00","35.00"],["CN-SD","Shandong","118.00","36.00"],
+        ["CN-SH","Xangai","121.00","31.00"],["CN-SX","Shanxi","112.00","38.00"],
+        ["CN-SC","Sichuan","104.00","30.50"],["CN-TW","Taiwan","121.00","24.00"],
+        ["CN-TJ","Tianjin","117.00","39.00"],["CN-XJ","Xinjiang","85.00","43.00"],
+        ["CN-XZ","Tibete","89.00","31.00"],["CN-YN","Yunnan","102.00","25.00"],
+        ["CN-ZJ","Zhejiang","120.00","30.00"],["CN-BJ","Pequim","116.40","39.90"],
+        ["CN-CQ","Chongqing","106.50","29.50"]
+    ],
+    // Índia
+    Q668: [
+        ["IN-AP","Andhra Pradesh","80.00","15.50"],["IN-AR","Arunachal Pradesh","95.00","27.50"],
+        ["IN-AS","Assam","93.00","26.00"],["IN-BR","Bihar","85.00","25.50"],
+        ["IN-CT","Chhattisgarh","82.00","21.50"],["IN-GA","Goa","74.00","15.50"],
+        ["IN-GJ","Gujarat","72.00","22.50"],["IN-HR","Haryana","76.00","29.50"],
+        ["IN-HP","Himachal Pradesh","78.00","32.00"],["IN-JH","Jharkhand","85.50","23.50"],
+        ["IN-KA","Karnataka","76.00","14.50"],["IN-KL","Kerala","76.00","10.50"],
+        ["IN-MP","Madhya Pradesh","78.00","23.50"],["IN-MH","Maharashtra","76.00","19.00"],
+        ["IN-MN","Manipur","94.00","24.50"],["IN-ML","Meghalaya","91.50","25.50"],
+        ["IN-MZ","Mizoram","93.00","23.00"],["IN-NL","Nagaland","94.50","26.00"],
+        ["IN-OR","Odisha","84.00","20.50"],["IN-PB","Punjab","75.50","31.00"],
+        ["IN-RJ","Rajastão","74.00","27.00"],["IN-SK","Sikkim","88.50","27.50"],
+        ["IN-TN","Tamil Nadu","78.50","11.00"],["IN-TG","Telangana","79.50","18.50"],
+        ["IN-TR","Tripura","91.50","23.50"],["IN-UP","Uttar Pradesh","80.00","27.00"],
+        ["IN-UT","Uttarakhand","79.00","30.00"],["IN-WB","West Bengal","88.00","23.00"],
+        ["IN-AN","Andaman e Nicobar","93.00","12.00"],["IN-CH","Chandigarh","76.78","30.75"],
+        ["IN-DL","Délhi","77.13","28.61"],["IN-LD","Lakshadweep","73.00","10.50"],
+        ["IN-PY","Puducherry","79.82","11.93"]
+    ],
+    // África do Sul
+    Q258: [
+        ["ZA-EC","Cabo Oriental","26.00","-32.50"],["ZA-FS","Estado Livre","27.00","-28.50"],
+        ["ZA-GT","Gauteng","28.00","-26.00"],["ZA-NL","KwaZulu-Natal","30.50","-29.00"],
+        ["ZA-LP","Limpopo","29.50","-24.00"],["ZA-MP","Mpumalanga","30.00","-26.00"],
+        ["ZA-NW","Noroeste","26.00","-27.00"],["ZA-NC","Cabo Setentrional","23.00","-30.00"],
+        ["ZA-WC","Cabo Ocidental","20.00","-33.50"]
+    ],
+    // Austrália
+    Q408: [
+        ["AU-NSW","Nova Gales do Sul","146.00","-33.00"],["AU-VIC","Vitória","145.00","-37.00"],
+        ["AU-QLD","Queensland","143.00","-23.00"],["AU-SA","Austrália do Sul","135.00","-30.00"],
+        ["AU-WA","Austrália Ocidental","122.00","-25.00"],["AU-TAS","Tasmânia","147.00","-42.00"],
+        ["AU-NT","Território do Norte","134.00","-20.00"],["AU-ACT","Território da Capital Australiana","149.14","-35.28"]
     ]
 };
 
@@ -565,6 +1425,15 @@ const ZONAS_TRANSITO = [
       desc: 'Obras na via portuária', horario: 'always' },
     { nome: 'Av. Rio Grande', tipo: 'traffic', lat: -32.040, lon: -52.092, raio: 300,
       desc: 'Trânsito na avenida beira-mar', horario: 'pico' },
+];
+
+// Radares de velocidade (pode ser expandido pelo usuário)
+const RADARES = [
+    { nome: 'Radar BR-392', lat: -32.025, lon: -52.082, limite: 60, raio: 200 },
+    { nome: 'Radar Av. Presidente Vargas', lat: -32.030, lon: -52.087, limite: 50, raio: 200 },
+    { nome: 'Radar Av. Rio Grande', lat: -32.038, lon: -52.095, limite: 40, raio: 200 },
+    { nome: 'Radar Zona Portuária', lat: -32.047, lon: -52.110, limite: 30, raio: 200 },
+    { nome: 'Radar Centro', lat: -32.033, lon: -52.096, limite: 40, raio: 200 },
 ];
 
 // Incidentes reportados pelo usuário
@@ -628,6 +1497,8 @@ setTimeout(desenharZonasNoMapa, 1000);
 
 // ============ NOTIFICAÇÃO DE TRÂNSITO ============
 function mostrarNotificacaoTransito(titulo, mensagem, callback) {
+    tocarSomNotificacao();
+    mostrarNotificacao(titulo, mensagem);
     const id = ++ultimaNotifId;
     const div = document.getElementById('notif-transito');
     document.getElementById('notif-titulo-texto').textContent = titulo;
@@ -666,10 +1537,7 @@ function verificarReRoteamento() {
     if (latDestino === null || lonDestino === null) return;
     const latAtual = latUsuarioGPS || latOrigem;
     const lonAtual = lonUsuarioGPS || lonOrigem;
-    let perfilOSRM = 'driving';
-    if (veiculoAtual === 'Bike') perfilOSRM = 'bicycle';
-    else if (veiculoAtual === 'A pé') perfilOSRM = 'foot';
-    const url = `https://router.project-osrm.org/route/v1/${perfilOSRM}/${lonAtual},${latAtual};${lonDestino},${latDestino}?overview=full&alternatives=3`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${lonAtual},${latAtual};${lonDestino},${latDestino}?overview=full&alternatives=3`;
     fetch(url).then(r => r.json()).then(dados => {
         if (!dados.routes || dados.routes.length < 2) return;
         const tempoAtual = dados.routes[0].duration;
@@ -714,6 +1582,21 @@ function verificarZonasProximas() {
                     `⚠ ${tipoTexto === 'engarrafamento' ? 'Trânsito intenso' : 'Obra na pista'} a ~${Math.round(distRestante)}m`,
                     () => calcularRota()
                 );
+                falar(`Atenção! ${tipoTexto === 'engarrafamento' ? 'Trânsito intenso' : 'Obra na pista'} a ${Math.round(distRestante)} metros.`);
+            }
+        }
+    });
+    // Verifica radares
+    RADARES.forEach(radar => {
+        const { minDist } = encontrarPontoIdxProximo(radar.lat, radar.lon, rotaCoords);
+        if (minDist < radar.raio + 400) {
+            const agora = Date.now();
+            if (minDist > 20 && (!radar._ultimoAlerta || agora - radar._ultimoAlerta > 600000)) {
+                radar._ultimoAlerta = agora;
+                const distM = Math.round(minDist);
+                const notifTexto = `📷 Radar a ~${distM}m (limite ${radar.limite} km/h)`;
+                mostrarNotificacaoTransito(radar.nome, notifTexto, null);
+                falar(`Atenção! Radar a ${distM} metros. Velocidade máxima ${radar.limite} quilômetros por hora.`);
             }
         }
     });
@@ -759,7 +1642,7 @@ function atualizarInfoTransito() {
 
 function iniciarNavegacao() {
     if (!dadosRotaAtual || !dadosRotaAtual.routes || !dadosRotaAtual.routes[0]) {
-        mostrarToast("Calcule uma rota primeiro.", "erro");
+        mostrarToast(t("msgCalculeRotaPrimeiro"), "erro");
         return;
     }
     if (!gpsAtivo && window.location.protocol !== 'file:') {
@@ -772,6 +1655,7 @@ function iniciarNavegacao() {
     }
     modoMotorista = true;
     navegacaoStepIdx = 0;
+    _ultimoStepIdxFalado = -1;
     document.getElementById('navegacao-header').classList.add('visivel');
     document.getElementById('painel-info-rota').classList.remove('visivel');
     document.querySelector('.painel-veiculos').classList.add('minimizado');
@@ -797,6 +1681,7 @@ function iniciarNavegacao() {
     }, 4000);
 
     mostrarToast("Navegação iniciada! Siga as instruções.", "sucesso", 2500);
+    mostrarNotificacao('Rotas Inteligentes', 'Navegação iniciada! Siga as instruções.');
 }
 
 function pararNavegacao() {
@@ -847,6 +1732,10 @@ function atualizarNavegacao(lat, lon) {
         elDist.textContent = 'Chegou!';
         elInst.textContent = 'Você chegou ao destino.';
         document.querySelector('.nav-status span').textContent = 'Destino alcançado!';
+        if (_ultimoStepIdxFalado !== proximoIdx) {
+            _ultimoStepIdxFalado = proximoIdx;
+            falar('Você chegou ao destino.');
+        }
         return;
     }
     elDist.className = 'nav-prox-distancia';
@@ -887,6 +1776,20 @@ function atualizarNavegacao(lat, lon) {
         instrucao = `Siga em ${nomeVia}`;
     }
     elInst.textContent = instrucao;
+    // Fala a instrução quando muda de passo
+    if (proximoIdx !== _ultimoStepIdxFalado) {
+        _ultimoStepIdxFalado = proximoIdx;
+        const prefixo = distParaManobra < 1000
+            ? `Em ${Math.round(distParaManobra / 10) * 10} metros, `
+            : `Em ${(distParaManobra / 1000).toFixed(1)} quilômetros, `;
+        if (t === 'arrive') {
+            falar(instrucao);
+        } else if (distParaManobra < 200) {
+            falar(instrucao);
+        } else {
+            falar(prefixo + instrucao.toLowerCase());
+        }
+    }
 
     // Distância e tempo restante total
     let distRestante = 0, tempoRestante = 0;
@@ -894,20 +1797,25 @@ function atualizarNavegacao(lat, lon) {
         distRestante += steps[i].distance || 0;
         tempoRestante += steps[i].duration || 0;
     }
-    // Inclui distância já percorrida do passo atual
+    // Inclui distância e tempo já percorridos do passo atual
     if (proximoIdx > 0 && steps[proximoIdx - 1]) {
         distRestante += steps[proximoIdx - 1].distance || 0;
+        tempoRestante += steps[proximoIdx - 1].duration || 0;
     }
 
-    // Veículo: carro aplica tempo normal, moto -25%
-    if (veiculoAtual === 'Moto') tempoRestante = tempoRestante * 0.75;
+    const mNav = MODOS[modoAtual];
+    if (mNav && mNav.velocidade) {
+        tempoRestante = Math.round(distRestante / 1000 / mNav.velocidade * 3600);
+    } else if (mNav && mNav.mult) {
+        tempoRestante = Math.round(tempoRestante * mNav.mult);
+    }
 
     const distKm = (distRestante / 1000).toFixed(1);
     let tempoTexto = '';
     if (tempoRestante >= 3600) {
         const h = Math.floor(tempoRestante / 3600);
         const m = Math.round((tempoRestante % 3600) / 60);
-        tempoTexto = h + 'h ' + (m > 0 ? m + 'min' : '');
+        tempoTexto = h + 'h ' + (m > 0 ? m + 'min' : '0min');
     } else {
         tempoTexto = Math.round(tempoRestante / 60) + ' min';
     }
@@ -921,7 +1829,7 @@ function atualizarNavegacao(lat, lon) {
 
 // ============ REPORTAR INCIDENTE ============
 function abrirModalReporte() {
-    if (!dadosRotaAtual) { mostrarToast('Calcule uma rota primeiro.', 'erro'); return; }
+    if (!dadosRotaAtual) { mostrarToast(t('msgCalculeRotaPrimeiro'), 'erro'); return; }
     document.getElementById('modal-reporte').classList.add('visivel');
 }
 
@@ -939,7 +1847,7 @@ function reportarIncidente(tipo) {
     incidentesReportados.push({ nome, tipo, lat: latAtual, lon: lonAtual, data });
     salvarIncidentes();
     desenharZonasNoMapa();
-    mostrarToast('Incidente reportado!', 'sucesso', 3000);
+    mostrarNotificacao('Rotas Inteligentes', 'Incidente reportado com sucesso!');
     setTimeout(verificarZonasProximas, 2000);
 }
 
@@ -988,7 +1896,7 @@ function permitirGPS() {
         err => {
             console.warn("GPS:", err.message);
             criarMarcadorFallback();
-            mostrarToast("GPS indisponível. Use o seletor de localização.", "erro", 5000);
+            mostrarToast(t("msgGPSNaoDisponivel"), "erro", 5000);
         },
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
     );
@@ -1072,69 +1980,103 @@ function mudarNivel(nivel) {
             carregarEstadosDoPais();
         } else {
             const lista = document.getElementById('hier-lista');
-            lista.innerHTML = '<div class="hier-carregando">Selecione um país primeiro na aba "País".</div>';
+            lista.innerHTML = `<div class="hier-carregando">${t('selecionePaisPrimeiro')}</div>`;
         }
     }
 }
 
 function carregarEstadosDoPais() {
-    console.log('carregarEstadosDoPais() chamado');
     const lista = document.getElementById('hier-lista');
-    lista.innerHTML = '<div class="hier-carregando">Carregando estados...</div>';
+    lista.innerHTML = `<div class="hier-carregando">${t('carregandoEstados')}</div>`;
 
     const wid = hierPai.wid;
-    console.log('wid = ' + wid);
     const estados = ESTADOS_POR_PAIS[wid];
-    console.log('estados = ', estados);
-    console.log('ESTADOS_POR_PAIS keys: ' + Object.keys(ESTADOS_POR_PAIS).join(','));
 
     if (!estados || estados.length === 0) {
-        console.log('Nenhum estado encontrado para wid=' + wid);
-        lista.innerHTML = '<div class="hier-carregando">Nenhum estado encontrado.</div>';
+        lista.innerHTML = '';
+        const item = document.createElement('div');
+        item.className = 'hier-item';
+        item.innerHTML = `<i class="material-icons">public</i><span class="hier-nome">${t('usarPais')}: ${hierPai.nome}</span>`;
+        item.setAttribute('onclick', "event.stopPropagation();usarPaisComoOrigem()");
+        lista.appendChild(item);
         return;
     }
 
     lista.innerHTML = '';
-    const elementos = estados.map(e => ({ nome: e[1], lat: parseFloat(e[2]), lon: parseFloat(e[3]) }));
+    const elementos = estados.map(e => {
+        const v1 = parseFloat(e[2]), v2 = parseFloat(e[3]);
+        const v1IsLon = Math.abs(v1) > 90;
+        const v2IsLon = Math.abs(v2) > 90;
+        if (v1IsLon && !v2IsLon) return { nome: e[1], lat: v2, lon: v1 };
+        if (!v1IsLon && v2IsLon) return { nome: e[1], lat: v1, lon: v2 };
+        return (wid === 'Q155' || wid === 'Q414')
+            ? { nome: e[1], lat: v1, lon: v2 }
+            : { nome: e[1], lat: v2, lon: v1 };
+    });
     elementos.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     hierEstadosCache = elementos;
     elementos.forEach(el => {
         const div = document.createElement('div');
         div.className = 'hier-item';
         div.setAttribute('onclick', "event.stopPropagation();selecionarEstado('" + el.nome + "'," + el.lat + "," + el.lon + ",'" + (hierPai ? hierPai.nome : '') + "')");
-        div.innerHTML = `<i class="material-icons">map</i><span class="hier-nome">${el.nome}</span><span style="font-size:0.65rem;text-transform:uppercase;color:#aaa;background:#f5f5f5;padding:1px 6px;border-radius:4px;flex-shrink:0;">ESTADO</span>`;
+        div.innerHTML = `<i class="material-icons">map</i><span class="hier-nome">${el.nome}</span><span style="font-size:0.65rem;text-transform:uppercase;color:#aaa;background:#f5f5f5;padding:1px 6px;border-radius:4px;flex-shrink:0;">${t('state').toUpperCase()}</span>`;
         lista.appendChild(div);
     });
 }
 
+function usarPaisComoOrigem() {
+    const pais = hierPai;
+    if (!pais) return;
+    const lista = document.getElementById('hier-lista');
+    lista.innerHTML = `<div class="hier-carregando">${t('buscando')}</div>`;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(pais.nome)}&featureType=country&limit=1&extratags=1`;
+    fetch(url).then(r => r.json()).then(d => {
+        if (d && d.length > 0) {
+            const lat = parseFloat(d[0].lat);
+            const lon = parseFloat(d[0].lon);
+            const obj = { lat: lat, lon: lon, display_name: pais.nome };
+            selecionarItemHierarquico(obj, pais.nome);
+        } else {
+            mostrarToast(t("msgEnderecoNaoEncontrado"), "erro");
+            carregarPaises();
+        }
+    }).catch(() => {
+        mostrarToast(t("msgErroBusca"), "erro");
+        carregarPaises();
+    });
+}
+
 function carregarPaises() {
-    console.log('carregarPaises() chamado');
     const lista = document.getElementById('hier-lista');
     lista.innerHTML = '';
+    let ultimoContinente = '';
     PAISES_POPULARES.forEach(p => {
+        if (p.continente && p.continente !== ultimoContinente) {
+            ultimoContinente = p.continente;
+            const header = document.createElement('div');
+            header.className = 'hier-header';
+            header.textContent = nomeContinente(p.continente);
+            lista.appendChild(header);
+        }
         const item = document.createElement('div');
         item.className = 'hier-item';
         item.setAttribute('onclick', "event.stopPropagation();selecionarPais('" + p.nome + "','" + p.code + "','" + p.wid + "')");
-        item.innerHTML = `<i class="material-icons">flag</i><span class="hier-nome">${p.nome}</span>`;
+        item.innerHTML = `<i class="material-icons">flag</i><span class="hier-nome">${nomePais(p)}</span>`;
         lista.appendChild(item);
     });
-    // Opção de buscar todos os países
     const item = document.createElement('div');
     item.className = 'hier-item';
     item.setAttribute('onclick', "event.stopPropagation();document.getElementById('hier-busca').focus();buscarHierarquico();");
-    item.innerHTML = `<i class="material-icons">search</i><span class="hier-nome">Buscar outro país...</span>`;
+    item.innerHTML = `<i class="material-icons">search</i><span class="hier-nome">${t('buscarOutroPais')}</span>`;
     lista.appendChild(item);
 }
 
 function selecionarPais(nome, code, wid) {
-    console.log('selecionarPais chamado: nome=' + nome + ' code=' + code + ' wid=' + wid);
     if (!wid) {
         const encontrado = PAISES_POPULARES.find(p => p.code === code || p.nome.toLowerCase() === nome.toLowerCase());
         if (encontrado) wid = encontrado.wid;
-        console.log('wid fallback: ' + wid);
     }
     hierPai = { nome, code, tipo: 'pais', wid };
-    console.log('hierPai definido:', JSON.stringify(hierPai));
     document.getElementById('hier-voltar').style.display = 'flex';
     mudarNivel('estado');
 }
@@ -1157,7 +2099,7 @@ function buscarHierarquico() {
 
     // Se estiver na aba Estado sem país selecionado, não faz nada
     if (hierNivelAtual === 'estado' && (!hierPai || hierPai.tipo !== 'pais')) {
-        lista.innerHTML = '<div class="hier-carregando">Selecione um país primeiro na aba "País".</div>';
+        lista.innerHTML = `<div class="hier-carregando">${t('selecionePaisPrimeiro')}</div>`;
         return;
     }
 
@@ -1175,7 +2117,7 @@ function buscarHierarquico() {
             return !termo || nome.toLowerCase().includes(termo.toLowerCase());
         });
         if (filtrados.length === 0) {
-            lista.innerHTML = '<div class="hier-carregando">Nenhum estado encontrado.</div>';
+            lista.innerHTML = `<div class="hier-carregando">${t('msgNenhumEncontrado')}</div>`;
             return;
         }
         // Ordena alfabeticamente
@@ -1185,20 +2127,20 @@ function buscarHierarquico() {
             const div = document.createElement('div');
             div.className = 'hier-item';
             div.setAttribute('onclick', "event.stopPropagation();selecionarEstado('" + nomeEstado + "'," + el.lat + "," + el.lon + ",'" + (hierPai ? hierPai.nome : '') + "')");
-            div.innerHTML = `<i class="material-icons">map</i><span class="hier-nome">${nomeEstado}</span><span style="font-size:0.65rem;text-transform:uppercase;color:#aaa;background:#f5f5f5;padding:1px 6px;border-radius:4px;flex-shrink:0;">ESTADO</span>`;
+            div.innerHTML = `<i class="material-icons">map</i><span class="hier-nome">${nomeEstado}</span><span style="font-size:0.65rem;text-transform:uppercase;color:#aaa;background:#f5f5f5;padding:1px 6px;border-radius:4px;flex-shrink:0;">${t('state').toUpperCase()}</span>`;
             lista.appendChild(div);
         });
         return;
     }
 
     // Para nível país, usa Nominatim com extratags para obter Wikidata ID
-    lista.innerHTML = '<div class="hier-carregando">Buscando...</div>';
+    lista.innerHTML = `<div class="hier-carregando">${t('buscando')}</div>`;
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(termo || '')}&featureType=country&limit=20&extratags=1`;
 
     fetch(url).then(r => r.json()).then(d => {
         lista.innerHTML = '';
         if (!d || d.length === 0) {
-            lista.innerHTML = '<div class="hier-carregando">Nada encontrado. Tente outro termo.</div>';
+            lista.innerHTML = `<div class="hier-carregando">${t('msgNenhumEncontrado')}</div>`;
             return;
         }
         const vistos = new Set();
@@ -1211,10 +2153,10 @@ function buscarHierarquico() {
             const code = (item.address && item.address.country_code) || nome.toLowerCase().slice(0,2);
             const wid = (item.extratags && item.extratags.wikidata) || null;
             div.setAttribute('onclick', "event.stopPropagation();selecionarPais('" + nome + "','" + code + "','" + wid + "')");
-            div.innerHTML = `<i class="material-icons">flag</i><span class="hier-nome">${nome}</span><span style="font-size:0.65rem;text-transform:uppercase;color:#aaa;background:#f5f5f5;padding:1px 6px;border-radius:4px;flex-shrink:0;">PAÍS</span>`;
+            div.innerHTML = `<i class="material-icons">flag</i><span class="hier-nome">${nome}</span><span style="font-size:0.65rem;text-transform:uppercase;color:#aaa;background:#f5f5f5;padding:1px 6px;border-radius:4px;flex-shrink:0;">${t('pais').toUpperCase()}</span>`;
             lista.appendChild(div);
         });
-    }).catch(() => { lista.innerHTML = '<div class="hier-carregando">Erro ao buscar.</div>'; });
+    }).catch(() => { lista.innerHTML = `<div class="hier-carregando">${t('msgErroBusca')}</div>`; });
 }
 
 function selecionarItemHierarquico(item, nome) {
@@ -1267,8 +2209,8 @@ function buscarOrigem() {
             marcadorOrigem = L.marker([latOrigem, lonOrigem], { draggable: true }).addTo(mapa).bindPopup('Origem: ' + origemNome);
             marcadorOrigem.on('dragend', function(e) { const p = e.target.getLatLng(); latOrigem = p.lat; lonOrigem = p.lng; if (latDestino !== null) calcularRota(); });
             if (latDestino !== null) calcularRota();
-        } else { mostrarToast("Origem não encontrada.", "erro"); }
-    }).catch(() => { ativarLoading(false); mostrarToast("Erro na busca.", "erro"); });
+        } else { mostrarToast(t("msgEnderecoNaoEncontrado"), "erro"); }
+    }).catch(() => { ativarLoading(false); mostrarToast(t("msgErroBusca"), "erro"); });
 }
 
 function usarGPScomoOrigem() {
@@ -1285,7 +2227,7 @@ function usarGPScomoOrigem() {
                 atualizarMarcadorGPS(latOrigem, lonOrigem, pos.coords.accuracy);
                 mapa.setView([latOrigem, lonOrigem], 15);
                 if (latDestino !== null) calcularRota();
-                mostrarToast("Origem: sua localização!", "sucesso", 2000);
+                mostrarToast(t("msgUsandoLocalizacao"), "sucesso", 2000);
             }, () => mostrarToast("Não foi possível obter localização.", "erro"),
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
@@ -1301,7 +2243,7 @@ document.getElementById('input-origem').addEventListener('input', function() {
     if (valor.length < 3) { container.classList.remove('visivel'); return; }
     document.getElementById('seletor-hierarquico').classList.remove('visivel');
     timeoutSugestaoOrigem = setTimeout(() => {
-        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(valor)}&limit=8&addressdetails=1`;
+        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(busca)}&limit=8&addressdetails=1`;
         if (latUsuarioGPS) url += `&lat=${latUsuarioGPS}&lon=${lonUsuarioGPS}`;
         fetch(url).then(r => r.json()).then(d => {
             container.innerHTML = '';
@@ -1336,7 +2278,7 @@ document.getElementById('input-origem').addEventListener('keypress', function(e)
 // ============ BUSCAR DESTINO (com viés de localização) ============
 function buscarEndereco() {
     const endereco = document.getElementById('input-destino').value;
-    if (!endereco) { mostrarToast("Digite um destino!", "erro"); return; }
+    if (!endereco) { mostrarToast(t("msgDigiteDestino"), "erro"); return; }
     ativarLoading(true);
     let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endereco)}&limit=1`;
     if (latUsuarioGPS) url += `&lat=${latUsuarioGPS}&lon=${lonUsuarioGPS}`;
@@ -1352,8 +2294,8 @@ function buscarEndereco() {
             marcadorDestino.on('dragend', function(e) { const p = e.target.getLatLng(); latDestino = p.lat; lonDestino = p.lng; calcularRota(); });
             salvarBuscaRecente(endereco, latDestino, lonDestino);
             calcularRota();
-        } else { mostrarToast("Endereço não encontrado.", "erro"); }
-    }).catch(() => { ativarLoading(false); mostrarToast("Erro na busca.", "erro"); });
+        } else { mostrarToast(t("msgEnderecoNaoEncontrado"), "erro"); }
+    }).catch(() => { ativarLoading(false); mostrarToast(t("msgErroBusca"), "erro"); });
 }
 document.getElementById('input-destino').addEventListener('keypress', function(e) { if (e.key === 'Enter') buscarEndereco(); });
 
@@ -1365,7 +2307,7 @@ document.getElementById('input-destino').addEventListener('input', function() {
     const container = document.getElementById('sugestoes-destino');
     if (valor.length < 3) { container.classList.remove('visivel'); return; }
     timeoutSugestao = setTimeout(() => {
-        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(valor)}&limit=8&addressdetails=1`;
+        let url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(busca)}&limit=8&addressdetails=1`;
         if (latUsuarioGPS) url += `&lat=${latUsuarioGPS}&lon=${lonUsuarioGPS}`;
         fetch(url).then(r => r.json()).then(d => {
             container.innerHTML = '';
@@ -1401,42 +2343,75 @@ document.addEventListener('click', function(e) {
     if (!e.target.closest('.barra-busca')) document.getElementById('sugestoes-destino').classList.remove('visivel');
 });
 
+// ============ CÁLCULO DE TEMPO POR MODO ============
+function recalcularTempo() {
+    if (!dadosRotaAtual || !dadosRotaAtual.routes || !dadosRotaAtual.routes[0]) return;
+    const rota = dadosRotaAtual.routes[0];
+    const distKm = rota.distance / 1000;
+    const dist = distKm.toFixed(1);
+    const tempoRaw = Math.round(rota.duration / 60);
+    const tempo = calcularTempo(distKm, tempoRaw);
+    atualizarPainelInfo(dist, tempo, tempoRaw);
+    if (linhaRota) {
+        linhaRota.bindPopup(`<b>${veiculoAtual}</b><br>${dist} km<br>${tempo} min`).openPopup();
+    }
+}
+
+function calcularTempo(distanciaKm, duracaoOsrmMin) {
+    const m = MODOS[modoAtual];
+    let resultado;
+    if (!m) resultado = Math.round(duracaoOsrmMin);
+    else if (m.velocidade) resultado = Math.round(distanciaKm / m.velocidade * 60);
+    else if (m.mult) resultado = Math.round(duracaoOsrmMin * m.mult);
+    else resultado = Math.round(duracaoOsrmMin);
+    return resultado;
+}
+
 // ============ CALCULAR ROTA ============
 function calcularRota() {
     if (latDestino === null || lonDestino === null) return;
     ativarLoading(true);
     fecharPainelInstrucoes();
-    let perfilOSRM = 'driving', corLinha = '#007bff';
-    if (veiculoAtual === 'Moto') { perfilOSRM = 'driving'; corLinha = '#ff9800'; }
-    else if (veiculoAtual === 'Bike') { perfilOSRM = 'bicycle'; corLinha = '#4caf50'; }
-    else if (veiculoAtual === 'A pé') { perfilOSRM = 'foot'; corLinha = '#9c27b0'; }
+    const modoInfo = MODOS[modoAtual];
+    let corLinha = modoInfo ? modoInfo.cor : '#007bff';
 
-    const urlRota = `https://router.project-osrm.org/route/v1/${perfilOSRM}/${lonOrigem},${latOrigem};${lonDestino},${latDestino}?overview=full&geometries=geojson&steps=true&alternatives=3`;
+    const perfilOSRM = 'driving';
+    let coordsStr = `${lonOrigem},${latOrigem}`;
+    // Adiciona waypoints
+    if (waypoints.length > 0) {
+        waypoints.forEach(wp => { coordsStr += `;${wp.lon},${wp.lat}`; });
+    }
+    coordsStr += `;${lonDestino},${latDestino}`;
+    const urlRota = `https://router.project-osrm.org/route/v1/${perfilOSRM}/${coordsStr}?overview=full&geometries=geojson&steps=true&alternatives=3`;
 
     fetch(urlRota).then(r => { if (!r.ok) throw new Error(`OSRM ${r.status}`); return r.json(); }).then(dados => {
         ativarLoading(false);
         if (linhaRota) { mapa.removeLayer(linhaRota); linhaRota = null; }
         linhasAlternativas.forEach(l => mapa.removeLayer(l)); linhasAlternativas = [];
-        if (!dados.routes || dados.routes.length === 0) { mostrarToast("Não foi possível calcular rota.", "erro"); return; }
+        if (!dados.routes || dados.routes.length === 0) { mostrarToast(t("msgNaoFoiPossivelCalcular"), "erro"); return; }
         dadosRotaAtual = dados;
         const cores = [corLinha, '#888', '#aaa'];
         dados.routes.forEach((rota, idx) => {
             const pts = rota.geometry.coordinates.map(c => [c[1], c[0]]);
             const polyline = L.polyline(pts, { color: cores[idx] || corLinha, weight: idx === 0 ? 6 : 4, opacity: idx === 0 ? 0.85 : 0.3, className: idx === 0 ? '' : 'rota-alternativa' });
-            if (idx === 0) { linhaRota = polyline.addTo(mapa); linhaRota.bindPopup(`<b>${veiculoAtual}</b><br>${(rota.distance/1000).toFixed(1)} km<br>${Math.round(rota.duration/60)} min`).openPopup(); }
+            if (idx === 0) { linhaRota = polyline.addTo(mapa); linhaRota.bindPopup(`<b>${veiculoAtual}</b><br>${(rota.distance/1000).toFixed(1)} km<br>${calcularTempo(rota.distance/1000, Math.round(rota.duration/60))} min`).openPopup(); }
             else { polyline.addTo(mapa); linhasAlternativas.push(polyline); polyline.on('click', () => selecionarAlternativa(idx, dados, cores, corLinha)); }
         });
         animarRota(linhaRota);
-        const dist = (dados.routes[0].distance / 1000).toFixed(1);
-        let tempo = Math.round(dados.routes[0].duration / 60);
-        if (veiculoAtual === 'Moto') tempo = Math.round(tempo * 0.75);
+        const distKm = dados.routes[0].distance / 1000;
+        const dist = distKm.toFixed(1);
+        const tempoRaw = Math.round(dados.routes[0].duration / 60);
+        const tempo = calcularTempo(distKm, tempoRaw);
         mapa.fitBounds(linhaRota.getBounds(), { padding: [50, 50] });
-        atualizarPainelInfo(dist, tempo);
+        atualizarPainelInfo(dist, tempo, tempoRaw);
         document.getElementById('botao-limpar-rota').classList.add('visivel');
         document.getElementById('toggle-instrucoes-btn').classList.add('visivel');
+        mostrarNotificacao('Rotas Inteligentes', `Rota: ${dist} km, ${tempo} min`);
         iniciarReRoteamento();
         setTimeout(atualizarInfoTransito, 2000);
-    }).catch(erro => { ativarLoading(false); console.error(erro); mostrarToast("Erro ao calcular rota.", "erro"); });
+        // Auto-salvar histórico
+        salvarHistorico(dist, tempo);
+    }).catch(erro => { ativarLoading(false); console.error(erro); mostrarToast(t("msgErroCalcularRota"), "erro"); });
 }
 
 function selecionarAlternativa(idx, dados, cores, corBase) {
@@ -1445,7 +2420,7 @@ function selecionarAlternativa(idx, dados, cores, corBase) {
     linhasAlternativas.forEach(l => mapa.removeLayer(l)); linhasAlternativas = [];
     const pts = rota.geometry.coordinates.map(c => [c[1], c[0]]);
     linhaRota = L.polyline(pts, { color: corBase, weight: 6, opacity: 0.85 }).addTo(mapa);
-    linhaRota.bindPopup(`<b>${veiculoAtual}</b><br>${(rota.distance/1000).toFixed(1)} km<br>${Math.round(rota.duration/60)} min`).openPopup();
+    linhaRota.bindPopup(`<b>${veiculoAtual}</b><br>${(rota.distance/1000).toFixed(1)} km<br>${calcularTempo(rota.distance/1000, Math.round(rota.duration/60))} min`).openPopup();
     animarRota(linhaRota);
     dados.routes.forEach((r, i) => {
         if (i === idx || i === 0) return;
@@ -1453,10 +2428,11 @@ function selecionarAlternativa(idx, dados, cores, corBase) {
         const pl = L.polyline(p, { color: cores[i] || '#aaa', weight: 4, opacity: 0.3, className: 'rota-alternativa' }).addTo(mapa);
         linhasAlternativas.push(pl); pl.on('click', () => selecionarAlternativa(i, dados, cores, corBase));
     });
-    const dist = (rota.distance / 1000).toFixed(1);
-    let tempo = Math.round(rota.duration / 60);
-    if (veiculoAtual === 'Moto') tempo = Math.round(tempo * 0.75);
-    atualizarPainelInfo(dist, tempo);
+    const distKm = rota.distance / 1000;
+    const dist = distKm.toFixed(1);
+    const tempoRaw = Math.round(rota.duration / 60);
+    const tempo = calcularTempo(distKm, tempoRaw);
+    atualizarPainelInfo(dist, tempo, tempoRaw);
     mapa.fitBounds(linhaRota.getBounds(), { padding: [50, 50] });
     dadosRotaAtual = dados;
     setTimeout(atualizarInfoTransito, 1000);
@@ -1475,11 +2451,11 @@ function animarRota(polyline) {
     setTimeout(() => { clearInterval(interval); mapa.removeLayer(anim); }, 2500);
 }
 
-function atualizarPainelInfo(distanciaKm, tempoMinutos) {
+function atualizarPainelInfo(distanciaKm, tempoMinutos, tempoRawMinutos) {
     document.getElementById('info-veiculo').textContent = veiculoAtual;
     document.getElementById('info-distancia').textContent = distanciaKm + ' km';
     let tempoTexto = '';
-    if (tempoMinutos >= 60) { const h = Math.floor(tempoMinutos / 60), m = tempoMinutos % 60; tempoTexto = h + 'h' + (m > 0 ? m + 'min' : ''); }
+    if (tempoMinutos >= 60) { const h = Math.floor(tempoMinutos / 60), m = tempoMinutos % 60; tempoTexto = h + 'h ' + (m > 0 ? m + 'min' : '0min'); }
     else { tempoTexto = tempoMinutos + ' min'; }
     document.getElementById('info-tempo').textContent = tempoTexto;
     document.getElementById('info-destino').textContent = ultimoDestinoNome || 'Destino';
@@ -1487,13 +2463,14 @@ function atualizarPainelInfo(distanciaKm, tempoMinutos) {
     // ETA
     const agora = new Date();
     const chegada = new Date(agora.getTime() + tempoMinutos * 60000);
-    document.getElementById('info-chegada').textContent = chegada.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const locale = idiomaAtual === 'pt' ? 'pt-BR' : idiomaAtual === 'en' ? 'en-US' : 'es-ES';
+    document.getElementById('info-chegada').textContent = chegada.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
-    // Velocidade média
+    // Velocidade média (calculada com tempo raw do OSRM, sem ajuste de veículo)
     const distNum = parseFloat(distanciaKm);
-    const tempoHoras = tempoMinutos / 60;
-    if (distNum > 0 && tempoHoras > 0) {
-        document.getElementById('info-velocidade').textContent = Math.round(distNum / tempoHoras) + ' km/h';
+    const tempoRawHoras = (tempoRawMinutos || tempoMinutos) / 60;
+    if (distNum > 0 && tempoRawHoras > 0) {
+        document.getElementById('info-velocidade').textContent = Math.round(distNum / tempoRawHoras) + ' km/h';
     } else {
         document.getElementById('info-velocidade').textContent = '-';
     }
@@ -1513,7 +2490,7 @@ function salvarConfigCusto() {
     const p = parseFloat(document.getElementById('input-preco-comb').value) || 6.50;
     localStorage.setItem('rotas_config_custo', JSON.stringify({ consumo: c, preco: p }));
     fecharConfigCusto();
-    mostrarToast('Configuração salva!', 'sucesso', 2000);
+    mostrarToast(t("msgConfigSalva"), 'sucesso', 2000);
     if (dadosRotaAtual) { const d = (dadosRotaAtual.routes[0].distance / 1000); atualizarCusto(d); }
 }
 function abrirConfigCusto() {
@@ -1526,25 +2503,22 @@ function fecharConfigCusto() {
     document.getElementById('modal-config-custo').classList.remove('visivel');
 }
 function atualizarCusto(distKm) {
-    if (!distKm || distKm <= 0 || veiculoAtual === 'A pé') {
-        document.getElementById('info-custo').textContent = veiculoAtual === 'A pé' ? 'Grátis' : '-';
-        return;
-    }
+    if (!distKm || distKm <= 0) return;
+    const m = MODOS[modoAtual];
+    if (!m || m.custoAjuste === 0) { document.getElementById('info-custo').textContent = 'Grátis'; return; }
     const cfg = carregarConfigCusto();
     const consumo = cfg.consumo || 10;
     const preco = cfg.preco || 6.50;
-    const ajuste = veiculoAtual === 'Moto' ? 0.4 : veiculoAtual === 'Bike' ? 0 : 1;
-    if (ajuste === 0) { document.getElementById('info-custo').textContent = 'Grátis'; return; }
-    const litros = (distKm / consumo) * ajuste;
+    const litros = (distKm / consumo) * m.custoAjuste;
     const custo = litros * preco;
     document.getElementById('info-custo').textContent = 'R$ ' + custo.toFixed(2).replace('.', ',');
 }
 
 // ============ PONTOS DE INTERESSE NA VIAGEM ============
 function buscarPOI(tipo) {
-    if (!dadosRotaAtual || !dadosRotaAtual.routes[0]) { mostrarToast('Calcule uma rota primeiro.', 'erro'); return; }
+    if (!dadosRotaAtual || !dadosRotaAtual.routes[0]) { mostrarToast(t('msgCalculeRotaPrimeiro'), 'erro'); return; }
     const destLat = latDestino, destLon = lonDestino;
-    if (!destLat || !destLon) { mostrarToast('Destino não definido.', 'erro'); return; }
+    if (!destLat || !destLon) { mostrarToast(t('msgDestinoNaoDefinido'), 'erro'); return; }
     ativarLoading(true);
     const termos = { gas_station: 'posto+de+gasolina', restaurant: 'restaurante', parking: 'estacionamento', hotel: 'hotel' };
     const termo = termos[tipo] || tipo;
@@ -1613,8 +2587,14 @@ function recolherInstrucoes() { fecharPainelInstrucoes(); }
 // ============ SELEÇÃO DE VEÍCULO ============
 function selecionarVeiculo(elemento, nomeVeiculo) {
     document.querySelectorAll('.botao-veiculo').forEach(b => b.classList.remove('ativo'));
-    elemento.classList.add('ativo'); veiculoAtual = nomeVeiculo;
-    if (latDestino !== null) calcularRota();
+    elemento.classList.add('ativo'); veiculoAtual = nomeVeiculo; modoAtual = elemento.getAttribute('data-mode') || 'carro';
+    if (latDestino !== null) {
+        if (dadosRotaAtual && dadosRotaAtual.routes && dadosRotaAtual.routes[0]) {
+            recalcularTempo();
+        } else {
+            calcularRota();
+        }
+    }
 }
 
 // ============ LIMPAR ROTA ============
@@ -1631,7 +2611,7 @@ function limparRota() {
     if (modoMotorista) pararNavegacao();
     pararReRoteamento();
     mapa.setView([latOrigem, lonOrigem], 14);
-    mostrarToast("Rota removida.", "sucesso", 2000);
+    mostrarToast(t("msgRotaRemovida"), "sucesso", 2000);
 }
 
 // ============ CENTRALIZAR ============
@@ -1706,11 +2686,11 @@ function compartilharRota() {
     if (!dadosRotaAtual || !dadosRotaAtual.routes[0]) { mostrarToast("Calcule uma rota primeiro.", "erro"); return; }
     const r = dadosRotaAtual.routes[0];
     const d = (r.distance/1000).toFixed(1);
-    let t = Math.round(r.duration/60); if (veiculoAtual === 'Moto') t = Math.round(t*0.75);
+    const t = calcularTempo(r.distance/1000, Math.round(r.duration/60));
     const texto = `Rotas Inteligentes\n${veiculoAtual} | ${d} km | ~${t} min\n${origemNome} → ${ultimoDestinoNome}`;
     if (navigator.share) { navigator.share({ title: 'Rotas Inteligentes', text: texto }).catch(() => {}); }
     else {
-        navigator.clipboard.writeText(texto).then(() => mostrarToast("Rota copiada!", "sucesso", 2000)).catch(() => mostrarToast("Erro ao copiar.", "erro"));
+        navigator.clipboard.writeText(texto).then(() => mostrarToast(t("msgRotaCopiada"), "sucesso", 2000)).catch(() => mostrarToast(t("msgErroCopiar"), "erro"));
     }
 }
 
@@ -1727,10 +2707,10 @@ function confirmarSalvarFavorito() {
     if (!nome) { mostrarToast("Digite um nome.", "erro"); return; }
     let favs = JSON.parse(localStorage.getItem('rotas_favoritas') || '[]');
     favs = favs.filter(f => f.nome !== nome);
-    favs.unshift({ nome, origem: { lat: latOrigem, lon: lonOrigem, nome: origemNome }, destino: { lat: latDestino, lon: lonDestino, nome: ultimoDestinoNome }, veiculo: veiculoAtual });
+    favs.unshift({ nome, origem: { lat: latOrigem, lon: lonOrigem, nome: origemNome }, destino: { lat: latDestino, lon: lonDestino, nome: ultimoDestinoNome }, veiculo: veiculoAtual, modo: modoAtual });
     if (favs.length > 20) favs = favs.slice(0, 20);
     localStorage.setItem('rotas_favoritas', JSON.stringify(favs));
-    fecharModalFavorito(); mostrarToast("Favorito salvo!", "sucesso", 2000);
+    fecharModalFavorito(); mostrarToast(t("msgFavoritoSalvo"), "sucesso", 2000);
     atualizarFavoritos();
 }
 function atualizarFavoritos() {
@@ -1746,7 +2726,7 @@ function atualizarFavoritos() {
             let lista = JSON.parse(localStorage.getItem('rotas_favoritas') || '[]');
             lista.splice(parseInt(this.dataset.idx), 1);
             localStorage.setItem('rotas_favoritas', JSON.stringify(lista));
-            atualizarFavoritos(); mostrarToast("Removido.", "sucesso", 1500);
+            atualizarFavoritos(); mostrarToast(t("msgFavoritoRemovido"), "sucesso", 1500);
         };
         c.appendChild(item);
     });
@@ -1758,7 +2738,8 @@ function carregarFavorito(f) {
     veiculoAtual = f.veiculo;
     document.getElementById('input-origem').value = origemNome;
     document.getElementById('input-destino').value = ultimoDestinoNome;
-    document.querySelectorAll('.botao-veiculo').forEach(b => { b.classList.remove('ativo'); if (b.textContent.trim() === veiculoAtual) b.classList.add('ativo'); });
+    modoAtual = f.modo || 'carro';
+    document.querySelectorAll('.botao-veiculo').forEach(b => { b.classList.remove('ativo'); if (b.getAttribute('data-mode') === modoAtual) b.classList.add('ativo'); });
     if (gpsAtivo) { if (accuracyCircle) { mapa.removeLayer(accuracyCircle); accuracyCircle = null; } if (gpsRing) { mapa.removeLayer(gpsRing); gpsRing = null; } gpsAtivo = false; }
     if (marcadorOrigem) mapa.removeLayer(marcadorOrigem);
     marcadorOrigem = L.marker([latOrigem, lonOrigem], { draggable: true }).addTo(mapa).bindPopup('Origem: ' + origemNome);
@@ -1779,23 +2760,257 @@ function trocarMapa() {
     mostrarToast({ street: 'Mapa padrão', dark: 'Modo noturno', satellite: 'Satélite' }[prox], "sucesso", 1500);
 }
 
-// ============ SERVICE WORKER ============
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+// ============ TEMA ESCURO ============
+if (temaEscuro) document.body.classList.add('dark-mode');
+function toggleTema() {
+    temaEscuro = !temaEscuro;
+    document.body.classList.toggle('dark-mode', temaEscuro);
+    localStorage.setItem('rotas_tema_escuro', temaEscuro);
+    document.getElementById('btn-tema').textContent = temaEscuro ? '☀️' : '🌙';
+    document.getElementById('btn-tema').title = temaEscuro ? 'Modo claro' : 'Modo escuro';
 }
+document.getElementById('btn-tema').textContent = temaEscuro ? '☀️' : '🌙';
+document.getElementById('btn-tema').title = temaEscuro ? 'Modo claro' : 'Modo escuro';
+
+// ============ WAYPOINTS ============
+function adicionarWaypoint() {
+    const nome = prompt('Digite o nome do local de parada:');
+    if (!nome) return;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(nome)}&limit=1`;
+    fetch(url).then(r => r.json()).then(d => {
+        if (!d || !d.length) { mostrarToast(t("msgEnderecoNaoEncontrado"), "erro"); return; }
+        const lat = parseFloat(d[0].lat), lon = parseFloat(d[0].lon);
+        waypoints.push({ nome, lat, lon });
+        renderizarWaypoints();
+        if (latDestino !== null) calcularRota();
+    }).catch(() => mostrarToast(t("msgErroBusca"), "erro"));
+}
+function removerWaypoint(idx) {
+    waypoints.splice(idx, 1);
+    renderizarWaypoints();
+    if (latDestino !== null) calcularRota();
+}
+function renderizarWaypoints() {
+    const container = document.getElementById('waypoints-container');
+    const lista = document.getElementById('waypoints-list');
+    lista.innerHTML = '';
+    if (waypoints.length === 0) { container.classList.remove('visivel'); return; }
+    container.classList.add('visivel');
+    waypoints.forEach((wp, i) => {
+        const div = document.createElement('div'); div.className = 'waypoint-item';
+        div.innerHTML = `<i class="material-icons">drag_handle</i><span>${wp.nome}</span><i class="material-icons wp-remover" onclick="removerWaypoint(${i})">close</i>`;
+        lista.appendChild(div);
+    });
+}
+
+// ============ HISTÓRICO DE ROTAS ============
+function salvarHistorico(dist, tempo) {
+    const entry = {
+        origem: origemNome || 'Desconhecido',
+        destino: ultimoDestinoNome || 'Desconhecido',
+        veiculo: veiculoAtual,
+        distancia: dist,
+        tempo: tempo,
+        data: new Date().toISOString(),
+        latOrigem, lonOrigem, latDestino, lonDestino, modo: modoAtual
+    };
+    let hist = JSON.parse(localStorage.getItem('rotas_historico') || '[]');
+    hist.unshift(entry);
+    if (hist.length > 50) hist = hist.slice(0, 50);
+    localStorage.setItem('rotas_historico', JSON.stringify(hist));
+    atualizarHistorico();
+}
+function mostrarHistorico() {
+    const p = document.getElementById('painel-historico');
+    p.classList.toggle('visivel');
+    document.getElementById('painel-favoritos').classList.remove('visivel');
+    atualizarHistorico();
+}
+function atualizarHistorico() {
+    const hist = JSON.parse(localStorage.getItem('rotas_historico') || '[]');
+    const c = document.getElementById('lista-historico');
+    c.innerHTML = '';
+    hist.forEach((h, i) => {
+        const d = new Date(h.data);
+        const dataStr = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const item = document.createElement('div'); item.className = 'hist-item';
+        item.innerHTML = `<div class="hist-dest">${h.destino}</div><div class="hist-meta"><span>${h.veiculo}</span><span>${h.distancia} km</span><span>${h.tempo} min</span><span>${dataStr}</span></div>`;
+        item.onclick = () => carregarHistorico(h);
+        c.appendChild(item);
+    });
+}
+function carregarHistorico(h) {
+    latOrigem = h.latOrigem; lonOrigem = h.lonOrigem; origemNome = h.origem;
+    latDestino = h.latDestino; lonDestino = h.lonDestino; ultimoDestinoNome = h.destino;
+    veiculoAtual = h.veiculo; modoAtual = h.modo || 'carro';
+    document.getElementById('input-origem').value = origemNome;
+    document.getElementById('input-destino').value = ultimoDestinoNome;
+    document.querySelectorAll('.botao-veiculo').forEach(b => { b.classList.remove('ativo'); if (b.getAttribute('data-mode') === modoAtual) b.classList.add('ativo'); });
+    if (gpsAtivo) { if (accuracyCircle) { mapa.removeLayer(accuracyCircle); accuracyCircle = null; } if (gpsRing) { mapa.removeLayer(gpsRing); gpsRing = null; } gpsAtivo = false; }
+    if (marcadorOrigem) mapa.removeLayer(marcadorOrigem);
+    marcadorOrigem = L.marker([latOrigem, lonOrigem], { draggable: true }).addTo(mapa).bindPopup('Origem: ' + origemNome);
+    marcadorOrigem.on('dragend', function(e) { const p = e.target.getLatLng(); latOrigem = p.lat; lonOrigem = p.lng; if (latDestino !== null) calcularRota(); });
+    if (marcadorDestino) mapa.removeLayer(marcadorDestino);
+    marcadorDestino = L.marker([latDestino, lonDestino], { draggable: true }).addTo(mapa).bindPopup(`<b>Destino:</b><br>${ultimoDestinoNome}`).openPopup();
+    marcadorDestino.on('dragend', function(e) { const p = e.target.getLatLng(); latDestino = p.lat; lonDestino = p.lng; calcularRota(); });
+    document.getElementById('painel-historico').classList.remove('visivel');
+    calcularRota();
+}
+function limparHistorico() {
+    if (confirm('Limpar todo o histórico?')) {
+        localStorage.removeItem('rotas_historico');
+        atualizarHistorico();
+        document.getElementById('painel-historico').classList.remove('visivel');
+    }
+}
+
+// ============ COMPARTILHAR COMO IMAGEM ============
+function compartilharRotaImagem() {
+    if (!dadosRotaAtual || !dadosRotaAtual.routes[0]) { mostrarToast("Calcule uma rota primeiro.", "erro"); return; }
+    if (typeof html2canvas === 'undefined') {
+        // Carrega html2canvas dinamicamente
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        script.onload = gerarImagemRota;
+        document.head.appendChild(script);
+    } else {
+        gerarImagemRota();
+    }
+}
+function gerarImagemRota() {
+    const painel = document.getElementById('painel-info-rota');
+    const originalDisplay = painel.style.display;
+    painel.style.display = 'flex';
+    html2canvas(painel, { backgroundColor: '#fff', scale: 2 }).then(canvas => {
+        painel.style.display = originalDisplay;
+        canvas.toBlob(blob => {
+            if (navigator.share && navigator.canShare({ files: [new File([blob], 'rota.png', { type: 'image/png' })] })) {
+                navigator.share({ title: 'Rotas Inteligentes', files: [new File([blob], 'rota.png', { type: 'image/png' })] }).catch(() => {});
+            } else {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'rota.png';
+                a.click();
+                URL.revokeObjectURL(a.href);
+                mostrarToast('Imagem salva!', 'sucesso', 2000);
+            }
+        });
+    }).catch(() => mostrarToast("Erro ao gerar imagem.", "erro"));
+}
+
+// ============ SERVICE WORKER ============
+if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
+    navigator.serviceWorker.register('sw.js').then(() => {
+        navigator.serviceWorker.ready.then(() => {
+            document.dispatchEvent(new Event('installready'));
+        });
+    }).catch(function(err) {
+        console.warn('Service Worker registration failed:', err);
+    });
+}
+
+// ============ NOTIFICAÇÕES ============
+function tocarSomNotificacao() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = 880;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.4);
+        setTimeout(() => {
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.frequency.value = 1100;
+            osc2.type = 'sine';
+            gain2.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+            osc2.start(ctx.currentTime);
+            osc2.stop(ctx.currentTime + 0.3);
+        }, 150);
+    } catch {}
+}
+
+function solicitarPermissaoNotificacao() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+
+function mostrarNotificacao(titulo, mensagem, icone) {
+    tocarSomNotificacao();
+    if ('Notification' in window && Notification.permission === 'granted') {
+        const n = new Notification(titulo, {
+            body: mensagem,
+            icon: icone || 'icon-192.png',
+            badge: 'icon-96.png',
+            vibrate: [200, 100, 200],
+            requireInteraction: true
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+        setTimeout(() => n.close(), 10000);
+    } else {
+        mostrarToast(mensagem, 'alerta', 5000);
+    }
+}
+
+solicitarPermissaoNotificacao();
 
 // ============ PWA ============
 let deferredPrompt = null;
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault(); deferredPrompt = e;
-    mostrarToast("Toque para instalar o app!", "sucesso", 6000);
-    document.getElementById('toast').style.cursor = 'pointer';
-    document.getElementById('toast').onclick = async () => {
-        if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null;
-            document.getElementById('toast').style.cursor = 'default'; document.getElementById('toast').onclick = null; }
-    };
+
+function mostrarBanner() {
+    if (localStorage.getItem('rotas_banner_fechado')) return;
+    if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) return;
+    document.getElementById('install-banner').classList.add('visivel');
+}
+
+function fecharBanner() {
+    document.getElementById('install-banner').classList.remove('visivel');
+    localStorage.setItem('rotas_banner_fechado', 'true');
+}
+
+function instalarApp() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.finally(function() {
+        deferredPrompt = null;
+        fecharBanner();
+    });
+}
+
+window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    deferredPrompt = e;
+    mostrarBanner();
 });
-window.addEventListener('appinstalled', () => mostrarToast("App instalado!", "sucesso", 3000));
+
+window.addEventListener('appinstalled', function() {
+    deferredPrompt = null;
+    fecharBanner();
+    localStorage.setItem('rotas_banner_fechado', 'true');
+    mostrarNotificacao('Rotas Inteligentes', 'App instalado com sucesso!');
+});
+
+document.getElementById('install-banner-btn').addEventListener('click', instalarApp);
+document.getElementById('install-banner-fechar').addEventListener('click', fecharBanner);
+
+// ============ IDIOMAS (delegação) ============
+document.querySelector('.idioma-selector').addEventListener('click', function(e) {
+    const btn = e.target.closest('[id^="lang-"]');
+    if (btn) mudarIdioma(btn.id.replace('lang-', ''));
+});
+
+// Inicializa idioma
+aplicarIdioma();
 </script>
 </body>
 </html>

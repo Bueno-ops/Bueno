@@ -1,0 +1,45 @@
+{
+  "packageId": "com.rotasinteligentes.app",
+  "host": "bueno-ops.github.io",
+  "name": "Rotas Inteligentes",
+  "launcherName": "Rotas",
+  "display": "standalone",
+  "themeColor": "#007bff",
+  "themeColorDark": "#0d1117",
+  "navigationColor": "#007bff",
+  "navigationColorDark": "#0d1117",
+  "navigationDividerColor": "#007bff",
+  "navigationDividerColorDark": "#0d1117",
+  "backgroundColor": "#ffffff",
+  "enableNotifications": true,
+  "startUrl": "/Bueno/app.html",
+  "iconUrl": "https://bueno-ops.github.io/Bueno/icon-512.png",
+  "maskableIconUrl": "https://bueno-ops.github.io/Bueno/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "",
+    "alias": ""
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://bueno-ops.github.io/Bueno/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": true
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}
