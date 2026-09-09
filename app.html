@@ -296,9 +296,9 @@
 
     <!-- Seletor de Idioma -->
     <div class="idioma-selector" style="position:absolute;top:95px;right:20px;z-index:30;display:flex;gap:4px;align-items:center;background:rgba(255,255,255,0.9);border-radius:20px;padding:4px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);font-size:0.75rem;">
-        <button style="border:none;background:transparent;cursor:pointer;font-size:1.1rem;padding:2px 4px;border-radius:50%;opacity:0.5" id="lang-pt" title="Português">🇧🇷</button>
-        <button style="border:none;background:transparent;cursor:pointer;font-size:1.1rem;padding:2px 4px;border-radius:50%;opacity:0.5" id="lang-en" title="English">🇺🇸</button>
-        <button style="border:none;background:transparent;cursor:pointer;font-size:1.1rem;padding:2px 4px;border-radius:50%;opacity:0.5" id="lang-es" title="Español">🇪🇸</button>
+        <button style="border:none;background:transparent;cursor:pointer;font-size:1.1rem;padding:2px 4px;border-radius:50%;opacity:0.5" id="lang-pt" onclick="mudarIdioma('pt')" title="Português">🇧🇷</button>
+        <button style="border:none;background:transparent;cursor:pointer;font-size:1.1rem;padding:2px 4px;border-radius:50%;opacity:0.5" id="lang-en" onclick="mudarIdioma('en')" title="English">🇺🇸</button>
+        <button style="border:none;background:transparent;cursor:pointer;font-size:1.1rem;padding:2px 4px;border-radius:50%;opacity:0.5" id="lang-es" onclick="mudarIdioma('es')" title="Español">🇪🇸</button>
     </div>
 
     <button class="tema-toggle" onclick="toggleTema()" id="btn-tema" title="Modo escuro">🌙</button>
@@ -308,7 +308,7 @@
         <div class="barra-origem" style="position:relative;">
             <span class="origem-label" data-i18n="de">DE</span>
             <i class="material-icons icon-origin" onclick="toggleSeletorHierarquico()" title="Selecionar estado/cidade" data-i18n-title="selecionarLocal">language</i>
-            <input type="text" id="input-origem" placeholder="Onde você está? (ou clique no globo)" autocomplete="off">
+            <input type="text" id="input-origem" placeholder="Onde você está? (ou clique no globo)" autocomplete="off" data-i18n-value="minhaLocalizacao">
             <i class="material-icons icon-gps" onclick="usarGPScomoOrigem()" title="Usar minha localização" data-i18n-title="ativarGPS">gps_fixed</i>
             <div class="seletor-hierarquico" id="seletor-hierarquico">
                 <div class="hier-niveis">
@@ -514,7 +514,7 @@ function falar(texto) {
 }
 
 // ============ SISTEMA DE IDIOMAS ============
-let idiomaAtual = navigator.language && navigator.language.startsWith('en') ? 'en' : navigator.language && navigator.language.startsWith('es') ? 'es' : 'pt';
+let idiomaAtual = localStorage.getItem('rotas_idioma') || (navigator.language && navigator.language.startsWith('en') ? 'en' : navigator.language && navigator.language.startsWith('es') ? 'es' : 'pt');
 const TRADUCOES = {
     pt: {
         // App
@@ -648,6 +648,7 @@ const TRADUCOES = {
         // GPS
         ativarGPS: 'Ativar GPS',
         desativarGPS: 'Desativar GPS',
+        minhaLocalizacao: 'Minha localização',
         // Language
         idioma: 'Idioma',
         pais: 'País',
@@ -808,6 +809,7 @@ const TRADUCOES = {
         rotaAlternativa: 'alternative route',
         ativarGPS: 'Enable GPS',
         desativarGPS: 'Disable GPS',
+        minhaLocalizacao: 'My location',
         idioma: 'Language',
         pais: 'Country',
         voltar: 'Back',
@@ -967,6 +969,7 @@ const TRADUCOES = {
         rotaAlternativa: 'ruta alternativa',
         ativarGPS: 'Activar GPS',
         desativarGPS: 'Desactivar GPS',
+        minhaLocalizacao: 'Mi ubicación',
         idioma: 'Idioma',
         pais: 'País',
         voltar: 'Volver',
@@ -1002,6 +1005,15 @@ function aplicarIdioma() {
         const chave = el.getAttribute('data-i18n-placeholder');
         el.setAttribute('placeholder', t(chave));
     });
+    document.querySelectorAll('[data-i18n-value]').forEach(el => {
+        const chave = el.getAttribute('data-i18n-value');
+        const trad = t(chave);
+        const todosValores = ['Minha localização', 'My location', 'Mi ubicación'];
+        if (todosValores.includes(el.value) || el.value === trad) {
+            el.value = trad;
+            if (el.id === 'input-origem') origemNome = trad;
+        }
+    });
     // Atualiza placeholders específicos
     const inpOrigem = document.getElementById('input-origem');
     if (inpOrigem) inpOrigem.setAttribute('placeholder', t('origemPlaceholder'));
@@ -1016,7 +1028,14 @@ function aplicarIdioma() {
 
 function mudarIdioma(idioma) {
     idiomaAtual = idioma;
+    localStorage.setItem('rotas_idioma', idioma);
     aplicarIdioma();
+    const inpOrigem = document.getElementById('input-origem');
+    const locais = ['Minha localização', 'My location', 'Mi ubicación'];
+    if (inpOrigem && locais.includes(inpOrigem.value)) {
+        inpOrigem.value = t('minhaLocalizacao');
+        origemNome = t('minhaLocalizacao');
+    }
     if (typeof carregarPaises === 'function') carregarPaises();
     if (typeof atualizarFavoritos === 'function') atualizarFavoritos();
     document.querySelectorAll('[id^="lang-"]').forEach(el => {
@@ -1886,7 +1905,7 @@ function permitirGPS() {
                     mostrarToast(`Localização: ${origemNome}`, "sucesso", 3000);
                 })
                 .catch(() => {
-                    origemNome = 'Minha localização';
+                    origemNome = t('minhaLocalizacao');
                     document.getElementById('input-origem').value = origemNome;
                     atualizarMarcadorGPS(lat, lon, pos.coords.accuracy);
                     mapa.setView([lat, lon], 15);
@@ -1933,8 +1952,8 @@ function atualizarMarcadorGPS(lat, lon, accuracy) {
     if (gpsRing) mapa.removeLayer(gpsRing);
     accuracyCircle = L.circle([lat, lon], { radius: accuracy || 50, className: 'gps-accuracy' }).addTo(mapa);
     gpsRing = L.circleMarker([lat, lon], { radius: 14, className: 'gps-ring' }).addTo(mapa);
-    marcadorOrigem = L.circleMarker([lat, lon], { radius: 7, className: 'gps-dot' }).addTo(mapa).bindPopup('Minha localização');
-    origemNome = 'Minha localização';
+    marcadorOrigem = L.circleMarker([lat, lon], { radius: 7, className: 'gps-dot' }).addTo(mapa).bindPopup(t('minhaLocalizacao'));
+    origemNome = t('minhaLocalizacao');
     document.getElementById('input-origem').value = origemNome;
 }
 
@@ -2219,7 +2238,7 @@ function usarGPScomoOrigem() {
             pos => {
                 latOrigem = pos.coords.latitude; lonOrigem = pos.coords.longitude;
                 latUsuarioGPS = latOrigem; lonUsuarioGPS = lonOrigem;
-                origemNome = 'Minha localização';
+                origemNome = t('minhaLocalizacao');
                 document.getElementById('input-origem').value = origemNome;
                 if (marcadorOrigem) mapa.removeLayer(marcadorOrigem);
                 if (accuracyCircle) { mapa.removeLayer(accuracyCircle); accuracyCircle = null; }
@@ -2626,7 +2645,7 @@ function centralizarLocalizacao() {
                     if (gpsRing) gpsRing.setLatLng([latOrigem, lonOrigem]);
                     if (accuracyCircle) { accuracyCircle.setLatLng([latOrigem, lonOrigem]); accuracyCircle.setRadius(pos.coords.accuracy); }
                 } else { atualizarMarcadorGPS(latOrigem, lonOrigem, pos.coords.accuracy); }
-                origemNome = 'Minha localização';
+                origemNome = t('minhaLocalizacao');
                 document.getElementById('input-origem').value = origemNome;
                 mapa.setView([latOrigem, lonOrigem], 16);
                 mostrarToast("Centralizado!", "sucesso", 1500);
@@ -2900,7 +2919,17 @@ function gerarImagemRota() {
 
 // ============ SERVICE WORKER ============
 if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').then(() => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+        reg.addEventListener('updatefound', () => {
+            const newSW = reg.installing;
+            if (newSW) {
+                newSW.addEventListener('statechange', () => {
+                    if (newSW.state === 'activated') {
+                        window.location.reload();
+                    }
+                });
+            }
+        });
         navigator.serviceWorker.ready.then(() => {
             document.dispatchEvent(new Event('installready'));
         });
