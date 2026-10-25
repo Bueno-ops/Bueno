@@ -17,3 +17,7 @@ release.keystore
 # Generated Android AAB/APK
 *.aab
 *.apk
+
+# Backups locais
+_backup-*/
+
