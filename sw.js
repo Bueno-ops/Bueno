@@ -1,4 +1,4 @@
-const CACHE = 'rotas-cache-v5';
+const CACHE = 'rotas-cache-v6';
 const URLS = [
     'app.html',
     'index.html',
@@ -36,7 +36,7 @@ self.addEventListener('fetch', e => {
     const url = new URL(e.request.url);
     if (url.pathname.endsWith('app.html') || url.pathname === '/' || url.pathname === '') {
         e.respondWith(networkFirst(e.request));
-    } else if (url.origin === 'https://router.project-osrm.org' || url.origin === 'https://nominatim.openstreetmap.org') {
+    } else if (url.origin === 'https://router.project-osrm.org' || url.origin === 'https://routing.openstreetmap.de' || url.origin === 'https://nominatim.openstreetmap.org') {
         e.respondWith(networkFirst(e.request));
     } else {
         e.respondWith(cacheFirst(e.request));

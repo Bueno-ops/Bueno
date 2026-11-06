@@ -485,11 +485,21 @@ const tiles = {
 tiles.street.addTo(mapa);
 
 const MODOS = {
-    carro: { nome: 'Carro', cor: '#007bff', velocidade: null,  mult: null,        custoAjuste: 1 },
-    moto:  { nome: 'Moto',  cor: '#ff9800', velocidade: null,  mult: 0.75,        custoAjuste: 0.4 },
-    bike:  { nome: 'Bike',  cor: '#4caf50', velocidade: 12,    mult: null,        custoAjuste: 0 },
-    ape:   { nome: 'A pé',  cor: '#9c27b0', velocidade: 4,     mult: null,        custoAjuste: 0 }
+    carro: { nome: 'Carro', cor: '#007bff', roteador: 'carro', custoAjuste: 1 },
+    moto:  { nome: 'Moto',  cor: '#ff9800', roteador: 'carro', custoAjuste: 0.4 },
+    bike:  { nome: 'Bike',  cor: '#4caf50', roteador: 'bike',  custoAjuste: 0 },
+    ape:   { nome: 'A pé',  cor: '#9c27b0', roteador: 'ape',   custoAjuste: 0 }
 };
+
+// Servidores OSRM com perfis de rota reais (carro, bike e a pé).
+// O router.project-osrm.org só tem perfil de carro, então bike/a pé usam o FOSSGIS.
+// velocidadeAprox: usada apenas se o perfil do modo estiver fora do ar.
+const ROTEADORES = {
+    carro: { base: 'https://routing.openstreetmap.de/routed-car',  velocidadeAprox: null },
+    bike:  { base: 'https://routing.openstreetmap.de/routed-bike', velocidadeAprox: 15 },
+    ape:   { base: 'https://routing.openstreetmap.de/routed-foot', velocidadeAprox: 4.5 }
+};
+const OSRM_RESERVA = 'https://router.project-osrm.org';
 
 let latOrigem = -32.095, lonOrigem = -52.180, latUsuarioGPS = null, lonUsuarioGPS = null;
 let latDestino = null, lonDestino = null;
@@ -582,6 +592,7 @@ const TRADUCOES = {
         msgErroBusca: 'Erro na busca.',
         msgErroCalcularRota: 'Erro ao calcular rota.',
         msgNaoFoiPossivelCalcular: 'Não foi possível calcular rota.',
+        msgRotaAproximada: 'Serviço de rotas deste modo indisponível — usando rota aproximada.',
         msgRotaCopiada: 'Rota copiada!',
         msgErroCopiar: 'Erro ao copiar.',
         msgRotaRemovida: 'Rota removida.',
@@ -716,6 +727,7 @@ const TRADUCOES = {
         msgErroBusca: 'Search error.',
         msgErroCalcularRota: 'Error calculating route.',
         msgNaoFoiPossivelCalcular: 'Could not calculate route.',
+        msgRotaAproximada: 'Route service for this mode is unavailable — using an approximate route.',
         msgRotaCopiada: 'Route copied!',
         msgErroCopiar: 'Error copying.',
         msgRotaRemovida: 'Route removed.',
@@ -876,6 +888,7 @@ const TRADUCOES = {
         msgErroBusca: 'Error en la búsqueda.',
         msgErroCalcularRota: 'Error al calcular la ruta.',
         msgNaoFoiPossivelCalcular: 'No se pudo calcular la ruta.',
+        msgRotaAproximada: 'Servicio de rutas de este modo no disponible — usando una ruta aproximada.',
         msgRotaCopiada: '¡Ruta copiada!',
         msgErroCopiar: 'Error al copiar.',
         msgRotaRemovida: 'Ruta eliminada.',
@@ -1556,7 +1569,7 @@ function verificarReRoteamento() {
     if (latDestino === null || lonDestino === null) return;
     const latAtual = latUsuarioGPS || latOrigem;
     const lonAtual = lonUsuarioGPS || lonOrigem;
-    const url = `https://router.project-osrm.org/route/v1/driving/${lonAtual},${latAtual};${lonDestino},${latDestino}?overview=full&alternatives=3`;
+    const url = urlRotaOSRM(`${lonAtual},${latAtual};${lonDestino},${latDestino}`, roteadorDoModo().base);
     fetch(url).then(r => r.json()).then(dados => {
         if (!dados.routes || dados.routes.length < 2) return;
         const tempoAtual = dados.routes[0].duration;
@@ -1822,12 +1835,7 @@ function atualizarNavegacao(lat, lon) {
         tempoRestante += steps[proximoIdx - 1].duration || 0;
     }
 
-    const mNav = MODOS[modoAtual];
-    if (mNav && mNav.velocidade) {
-        tempoRestante = Math.round(distRestante / 1000 / mNav.velocidade * 3600);
-    } else if (mNav && mNav.mult) {
-        tempoRestante = Math.round(tempoRestante * mNav.mult);
-    }
+    // O tempo restante vem direto das etapas da rota do modo escolhido (já é o tempo real na via).
 
     const distKm = (distRestante / 1000).toFixed(1);
     let tempoTexto = '';
@@ -2362,75 +2370,103 @@ document.addEventListener('click', function(e) {
     if (!e.target.closest('.barra-busca')) document.getElementById('sugestoes-destino').classList.remove('visivel');
 });
 
-// ============ CÁLCULO DE TEMPO POR MODO ============
-function recalcularTempo() {
-    if (!dadosRotaAtual || !dadosRotaAtual.routes || !dadosRotaAtual.routes[0]) return;
-    const rota = dadosRotaAtual.routes[0];
-    const distKm = rota.distance / 1000;
-    const dist = distKm.toFixed(1);
-    const tempoRaw = Math.round(rota.duration / 60);
-    const tempo = calcularTempo(distKm, tempoRaw);
-    atualizarPainelInfo(dist, tempo, tempoRaw);
-    if (linhaRota) {
-        linhaRota.bindPopup(`<b>${veiculoAtual}</b><br>${dist} km<br>${tempo} min`).openPopup();
-    }
+// ============ TEMPO DE VIAGEM ============
+// A duração vem sempre do roteador do modo escolhido: é o tempo real calculado
+// sobre a via (sem multiplicador fixo e sem distância ÷ velocidade média).
+function calcularTempo(distanciaKm, duracaoMin) {
+    return Math.max(1, Math.round(duracaoMin));
 }
 
-function calcularTempo(distanciaKm, duracaoOsrmMin) {
-    const m = MODOS[modoAtual];
-    let resultado;
-    if (!m) resultado = Math.round(duracaoOsrmMin);
-    else if (m.velocidade) resultado = Math.round(distanciaKm / m.velocidade * 60);
-    else if (m.mult) resultado = Math.round(duracaoOsrmMin * m.mult);
-    else resultado = Math.round(duracaoOsrmMin);
-    return resultado;
+function roteadorDoModo() {
+    const m = MODOS[modoAtual] || MODOS.carro;
+    return ROTEADORES[m.roteador] || ROTEADORES.carro;
+}
+
+function urlRotaOSRM(coordsStr, base) {
+    return `${base}/route/v1/driving/${coordsStr}?overview=full&geometries=geojson&steps=true&alternatives=3`;
+}
+
+// Usado apenas se o serviço do perfil estiver fora do ar: mantém a rota do carro
+// e converte os tempos pela velocidade média do modo, avisando o usuário.
+function ajustarTempoAproximado(dados, velocidadeKmh) {
+    if (!velocidadeKmh) return;
+    dados.routes.forEach(rota => {
+        const novoTempo = (rota.distance / 1000) / velocidadeKmh * 3600;
+        const fator = rota.duration > 0 ? novoTempo / rota.duration : 1;
+        rota.duration = novoTempo;
+        (rota.legs || []).forEach(leg => {
+            leg.duration = (leg.duration || 0) * fator;
+            (leg.steps || []).forEach(passo => { passo.duration = (passo.duration || 0) * fator; });
+        });
+    });
+    mostrarToast(t('msgRotaAproximada'), '', 4500);
 }
 
 // ============ CALCULAR ROTA ============
-function calcularRota() {
+async function calcularRota() {
     if (latDestino === null || lonDestino === null) return;
     ativarLoading(true);
     fecharPainelInstrucoes();
     const modoInfo = MODOS[modoAtual];
     let corLinha = modoInfo ? modoInfo.cor : '#007bff';
 
-    const perfilOSRM = 'driving';
     let coordsStr = `${lonOrigem},${latOrigem}`;
     // Adiciona waypoints
     if (waypoints.length > 0) {
         waypoints.forEach(wp => { coordsStr += `;${wp.lon},${wp.lat}`; });
     }
     coordsStr += `;${lonDestino},${latDestino}`;
-    const urlRota = `https://router.project-osrm.org/route/v1/${perfilOSRM}/${coordsStr}?overview=full&geometries=geojson&steps=true&alternatives=3`;
 
-    fetch(urlRota).then(r => { if (!r.ok) throw new Error(`OSRM ${r.status}`); return r.json(); }).then(dados => {
-        ativarLoading(false);
-        if (linhaRota) { mapa.removeLayer(linhaRota); linhaRota = null; }
-        linhasAlternativas.forEach(l => mapa.removeLayer(l)); linhasAlternativas = [];
-        if (!dados.routes || dados.routes.length === 0) { mostrarToast(t("msgNaoFoiPossivelCalcular"), "erro"); return; }
-        dadosRotaAtual = dados;
-        const cores = [corLinha, '#888', '#aaa'];
-        dados.routes.forEach((rota, idx) => {
-            const pts = rota.geometry.coordinates.map(c => [c[1], c[0]]);
-            const polyline = L.polyline(pts, { color: cores[idx] || corLinha, weight: idx === 0 ? 6 : 4, opacity: idx === 0 ? 0.85 : 0.3, className: idx === 0 ? '' : 'rota-alternativa' });
-            if (idx === 0) { linhaRota = polyline.addTo(mapa); linhaRota.bindPopup(`<b>${veiculoAtual}</b><br>${(rota.distance/1000).toFixed(1)} km<br>${calcularTempo(rota.distance/1000, Math.round(rota.duration/60))} min`).openPopup(); }
-            else { polyline.addTo(mapa); linhasAlternativas.push(polyline); polyline.on('click', () => selecionarAlternativa(idx, dados, cores, corLinha)); }
-        });
-        animarRota(linhaRota);
-        const distKm = dados.routes[0].distance / 1000;
-        const dist = distKm.toFixed(1);
-        const tempoRaw = Math.round(dados.routes[0].duration / 60);
-        const tempo = calcularTempo(distKm, tempoRaw);
-        mapa.fitBounds(linhaRota.getBounds(), { padding: [50, 50] });
-        atualizarPainelInfo(dist, tempo, tempoRaw);
-        document.getElementById('botao-limpar-rota').classList.add('visivel');
-        document.getElementById('toggle-instrucoes-btn').classList.add('visivel');
-        mostrarNotificacao('Rotas Inteligentes', `Rota: ${dist} km, ${tempo} min`);
-        iniciarReRoteamento();
-        setTimeout(atualizarInfoTransito, 2000);
-        // Auto-salvar histórico
-        salvarHistorico(dist, tempo);
-    }).catch(erro => { ativarLoading(false); console.error(erro); mostrarToast(t("msgErroCalcularRota"), "erro"); });
+    const roteador = roteadorDoModo();
+    const tentativas = [{ base: roteador.base, aproximada: false }];
+    if (roteador !== ROTEADORES.carro) tentativas.push({ base: ROTEADORES.carro.base, aproximada: true });
+    tentativas.push({ base: OSRM_RESERVA, aproximada: roteador !== ROTEADORES.carro });
+
+    let resultado = null, ultimoErro = null;
+    for (const tentativa of tentativas) {
+        try {
+            const resposta = await fetch(urlRotaOSRM(coordsStr, tentativa.base));
+            if (!resposta.ok) throw new Error(`OSRM ${resposta.status}`);
+            const dados = await resposta.json();
+            if (!dados.routes || dados.routes.length === 0) throw new Error('sem rota');
+            resultado = { dados, aproximada: tentativa.aproximada };
+            break;
+        } catch (erro) { ultimoErro = erro; }
+    }
+
+    ativarLoading(false);
+    if (!resultado) {
+        console.error(ultimoErro);
+        mostrarToast(t("msgErroCalcularRota"), "erro");
+        return;
+    }
+    if (resultado.aproximada) ajustarTempoAproximado(resultado.dados, roteador.velocidadeAprox);
+
+    const dados = resultado.dados;
+    if (linhaRota) { mapa.removeLayer(linhaRota); linhaRota = null; }
+    linhasAlternativas.forEach(l => mapa.removeLayer(l)); linhasAlternativas = [];
+    dadosRotaAtual = dados;
+    const cores = [corLinha, '#888', '#aaa'];
+    dados.routes.forEach((rota, idx) => {
+        const pts = rota.geometry.coordinates.map(c => [c[1], c[0]]);
+        const polyline = L.polyline(pts, { color: cores[idx] || corLinha, weight: idx === 0 ? 6 : 4, opacity: idx === 0 ? 0.85 : 0.3, className: idx === 0 ? '' : 'rota-alternativa' });
+        if (idx === 0) { linhaRota = polyline.addTo(mapa); linhaRota.bindPopup(`<b>${veiculoAtual}</b><br>${(rota.distance/1000).toFixed(1)} km<br>${calcularTempo(rota.distance/1000, Math.round(rota.duration/60))} min`).openPopup(); }
+        else { polyline.addTo(mapa); linhasAlternativas.push(polyline); polyline.on('click', () => selecionarAlternativa(idx, dados, cores, corLinha)); }
+    });
+    animarRota(linhaRota);
+    const distKm = dados.routes[0].distance / 1000;
+    const dist = distKm.toFixed(1);
+    const tempoRaw = Math.round(dados.routes[0].duration / 60);
+    const tempo = calcularTempo(distKm, tempoRaw);
+    mapa.fitBounds(linhaRota.getBounds(), { padding: [50, 50] });
+    atualizarPainelInfo(dist, tempo, tempoRaw);
+    document.getElementById('botao-limpar-rota').classList.add('visivel');
+    document.getElementById('toggle-instrucoes-btn').classList.add('visivel');
+    mostrarNotificacao('Rotas Inteligentes', `Rota: ${dist} km, ${tempo} min`);
+    iniciarReRoteamento();
+    setTimeout(atualizarInfoTransito, 2000);
+    // Auto-salvar histórico
+    salvarHistorico(dist, tempo);
 }
 
 function selecionarAlternativa(idx, dados, cores, corBase) {
@@ -2607,13 +2643,8 @@ function recolherInstrucoes() { fecharPainelInstrucoes(); }
 function selecionarVeiculo(elemento, nomeVeiculo) {
     document.querySelectorAll('.botao-veiculo').forEach(b => b.classList.remove('ativo'));
     elemento.classList.add('ativo'); veiculoAtual = nomeVeiculo; modoAtual = elemento.getAttribute('data-mode') || 'carro';
-    if (latDestino !== null) {
-        if (dadosRotaAtual && dadosRotaAtual.routes && dadosRotaAtual.routes[0]) {
-            recalcularTempo();
-        } else {
-            calcularRota();
-        }
-    }
+    // Cada modo tem percurso e tempo próprios: refaz a rota com o perfil certo.
+    if (latDestino !== null) calcularRota();
 }
 
 // ============ LIMPAR ROTA ============
