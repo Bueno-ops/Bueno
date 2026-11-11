@@ -128,6 +128,17 @@
         .barra-origem-container { position:absolute; top:80px; left:0; width:100%; padding:0 20px; z-index:10; display:flex; justify-content:center; }
         .barra-origem { width:100%; max-width:500px; background:white; padding:10px 20px; border-radius:30px; box-shadow:0 4px 12px rgba(0,0,0,0.15); display:flex; align-items:center; }
         .barra-origem input { border:none; outline:none; width:100%; margin-left:10px; font-size:0.9rem; }
+        .aviso-localizacao { position:absolute; top:calc(100% + 8px); left:0; right:0; display:none; align-items:center; gap:8px; background:#fff3cd; color:#664d03; border:1px solid #ffe69c; border-radius:12px; padding:8px 12px; font-size:0.8rem; line-height:1.25; box-shadow:0 2px 8px rgba(0,0,0,0.12); z-index:12; }
+        .aviso-localizacao.visivel { display:flex; }
+        .aviso-localizacao i { font-size:18px; flex:0 0 auto; }
+        .aviso-localizacao span { flex:1; }
+        .aviso-localizacao button { border:none; background:transparent; cursor:pointer; font-size:0.8rem; font-weight:600; color:#0d6efd; white-space:nowrap; padding:2px 4px; }
+        .aviso-localizacao .aviso-fechar { color:#664d03; font-size:1.1rem; line-height:1; padding:0 2px; }
+        .dark-mode .aviso-localizacao { background:#3a2f00; color:#ffe69c; border-color:#5c4a00; }
+        .dark-mode .aviso-localizacao button { color:#8ab4f8; }
+        .dark-mode .aviso-localizacao .aviso-fechar { color:#ffe69c; }
+        .versao-app { position:absolute; left:10px; bottom:6px; z-index:4; font-size:0.65rem; color:rgba(0,0,0,0.45); pointer-events:none; }
+        .dark-mode .versao-app { color:rgba(255,255,255,0.5); }
         .barra-origem .icon-origin { color:#28a745; cursor:pointer; font-size:20px; }
         .barra-origem .icon-gps { color:#007bff; cursor:pointer; font-size:20px; }
         .barra-origem .origem-label { font-size:0.75rem; color:#28a745; font-weight:600; margin-right:4px; white-space:nowrap; }
@@ -308,7 +319,7 @@
         <div class="barra-origem" style="position:relative;">
             <span class="origem-label" data-i18n="de">DE</span>
             <i class="material-icons icon-origin" onclick="toggleSeletorHierarquico()" title="Selecionar estado/cidade" data-i18n-title="selecionarLocal">language</i>
-            <input type="text" id="input-origem" placeholder="Onde você está? (ou clique no globo)" autocomplete="off" data-i18n-value="minhaLocalizacao">
+            <input type="text" id="input-origem" placeholder="Onde você está? (ou clique no globo)" autocomplete="off">
             <i class="material-icons icon-gps" onclick="usarGPScomoOrigem()" title="Usar minha localização" data-i18n-title="ativarGPS">gps_fixed</i>
             <div class="seletor-hierarquico" id="seletor-hierarquico">
                 <div class="hier-niveis">
@@ -320,6 +331,12 @@
                 <div class="hier-lista" id="hier-lista"></div>
             </div>
             <div class="sugestoes-container" id="sugestoes-origem"></div>
+            <div class="aviso-localizacao" id="aviso-localizacao" role="status">
+                <i class="material-icons">info</i>
+                <span id="aviso-localizacao-texto"></span>
+                <button type="button" onclick="corrigirLocalizacao()">Corrigir</button>
+                <button type="button" class="aviso-fechar" onclick="fecharAvisoLocalizacao()" aria-label="Fechar">&times;</button>
+            </div>
         </div>
     </div>
 
@@ -461,6 +478,7 @@
     <button class="botao-toggle-mapa" onclick="trocarMapa()" title="Trocar mapa"><i class="material-icons">layers</i></button>
     <button class="botao-localizacao" onclick="centralizarLocalizacao()" title="Centralizar"><i class="material-icons">my_location</i></button>
     <button class="botao-limpar-rota" id="botao-limpar-rota" onclick="limparRota()" title="Limpar"><i class="material-icons">close</i></button>
+    <div class="versao-app" id="versao-app" title="Versão do app">v1.0.1</div>
 
     <div class="painel-veiculos">
         <h3 data-i18n="selecioneTransporte">Selecione seu transporte:</h3>
@@ -508,6 +526,11 @@ let marcadorDestino = null, linhaRota = null, linhasAlternativas = [];
 let veiculoAtual = 'Carro', modoAtual = 'carro', ultimoDestinoNome = '', origemNome = '';
 let dadosRotaAtual = null, painelInstrucoesAberto = false;
 let gpsPermitido = false;
+const APP_VERSION = '1.0.1';
+const LIMITE_PRECISAO_M = 1500; // acima disso a localização do navegador é imprecisa (típico de PC sem Wi-Fi)
+let origemDefinida = false;
+let origemManual = null;
+const CHAVE_ORIGEM_MANUAL = 'rotas_origem_manual';
 let hierNivelAtual = 'pais', hierPai = null, hierEstadosCache = null;
 let modoMotorista = false, navegacaoTimer = null, navegacaoStepIdx = 0;
 let temaEscuro = localStorage.getItem('rotas_tema_escuro') === 'true';
@@ -1878,22 +1901,116 @@ function reportarIncidente(tipo) {
     setTimeout(verificarZonasProximas, 2000);
 }
 
-// ============ MODAL PERMISSÃO GPS ============
-if (window.location.protocol !== 'file:' && navigator.geolocation) {
-    setTimeout(() => document.getElementById('modal-gps').classList.add('visivel'), 500);
-} else {
-    criarMarcadorFallback();
+// ============ LOCALIZAÇÃO ============
+function precisaoBoa(acc) { return typeof acc === 'number' && acc > 0 && acc <= LIMITE_PRECISAO_M; }
+
+function formatarPrecisao(acc) {
+    if (typeof acc !== 'number' || !isFinite(acc) || acc <= 0) return 'precisão desconhecida';
+    if (acc < 1000) return `±${Math.round(acc)} m`;
+    return `±${(acc / 1000).toFixed(acc < 10000 ? 1 : 0)} km`;
 }
+
+function mostrarAvisoLocalizacao(msg) {
+    const caixa = document.getElementById('aviso-localizacao');
+    const texto = document.getElementById('aviso-localizacao-texto');
+    if (!caixa || !texto) return;
+    texto.textContent = msg;
+    caixa.classList.add('visivel');
+}
+
+function fecharAvisoLocalizacao() {
+    const caixa = document.getElementById('aviso-localizacao');
+    if (caixa) caixa.classList.remove('visivel');
+}
+
+function corrigirLocalizacao() {
+    fecharAvisoLocalizacao();
+    const inp = document.getElementById('input-origem');
+    if (inp) { inp.focus(); inp.select(); }
+}
+
+function carregarOrigemManual() {
+    try {
+        const salvo = JSON.parse(localStorage.getItem(CHAVE_ORIGEM_MANUAL) || 'null');
+        if (salvo && typeof salvo.lat === 'number' && typeof salvo.lon === 'number') return salvo;
+    } catch (e) { console.warn('Origem salva inválida:', e); }
+    return null;
+}
+
+function salvarOrigemManual(nome) {
+    origemManual = { lat: latOrigem, lon: lonOrigem, nome: nome || origemNome || '' };
+    try { localStorage.setItem(CHAVE_ORIGEM_MANUAL, JSON.stringify(origemManual)); } catch (e) { console.warn(e); }
+}
+
+function esquecerOrigemManual() {
+    origemManual = null;
+    try { localStorage.removeItem(CHAVE_ORIGEM_MANUAL); } catch (e) {}
+}
+
+function definirOrigem(lat, lon, nome, opcoes) {
+    opcoes = opcoes || {};
+    latOrigem = lat; lonOrigem = lon;
+    origemNome = nome || '';
+    origemDefinida = true;
+    if (opcoes.limparGPS) {
+        latUsuarioGPS = null; lonUsuarioGPS = null;
+        gpsAtivo = false;
+        if (accuracyCircle) { mapa.removeLayer(accuracyCircle); accuracyCircle = null; }
+        if (gpsRing) { mapa.removeLayer(gpsRing); gpsRing = null; }
+    }
+    document.getElementById('input-origem').value = origemNome;
+    if (opcoes.salvar) salvarOrigemManual(origemNome);
+    if (opcoes.fecharAviso !== false) fecharAvisoLocalizacao();
+}
+
+// Inicialização: se o usuário já definiu a origem manualmente, usa ela e não
+// deixa a localização aproximada do navegador (por IP) sobrescrever.
+function inicializarLocalizacao() {
+    origemManual = carregarOrigemManual();
+    if (origemManual) {
+        definirOrigem(origemManual.lat, origemManual.lon, origemManual.nome || 'Minha origem');
+        criarMarcadorFallback();
+        mapa.setView([latOrigem, lonOrigem], 12);
+        return;
+    }
+    if (window.location.protocol !== 'file:' && navigator.geolocation) {
+        setTimeout(() => document.getElementById('modal-gps').classList.add('visivel'), 500);
+    } else {
+        criarMarcadorFallback();
+    }
+}
+
+inicializarLocalizacao();
 
 function permitirGPS() {
     document.getElementById('modal-gps').classList.remove('visivel');
     gpsPermitido = true;
-    // Pega a localização e já faz reverse geocode para endereço exato
     navigator.geolocation.getCurrentPosition(
         pos => {
+            const acc = pos.coords.accuracy;
             const lat = pos.coords.latitude, lon = pos.coords.longitude;
-            latOrigem = lat; lonOrigem = lon;
-            latUsuarioGPS = lat; lonUsuarioGPS = lon;
+
+            // Em PC sem Wi-Fi o navegador cai em localização por IP, que pode apontar
+            // para outra cidade/estado. Nesse caso mantém a origem salva pelo usuário.
+            if (origemManual) {
+                definirOrigem(origemManual.lat, origemManual.lon, origemManual.nome || 'Minha origem');
+                criarMarcadorFallback();
+                mapa.setView([latOrigem, lonOrigem], 12);
+                mostrarAvisoLocalizacao(`Mantendo a origem salva: ${origemNome}. (GPS do navegador: ${formatarPrecisao(acc)}.)`);
+                return;
+            }
+
+            if (!precisaoBoa(acc)) {
+                definirOrigem(lat, lon, 'Localização aproximada');
+                atualizarMarcadorGPS(lat, lon, acc, 'Localização aproximada');
+                mapa.setView([lat, lon], 11);
+                mostrarAvisoLocalizacao(`Localização aproximada (${formatarPrecisao(acc)}) — pode estar em outra cidade/estado. Digite sua cidade ou arraste o pino para corrigir.`);
+                if (latDestino !== null) calcularRota();
+                return;
+            }
+
+            definirOrigem(lat, lon, t('minhaLocalizacao'));
+            fecharAvisoLocalizacao();
 
             // Reverse geocode para obter endereço completo
             fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`)
@@ -1904,40 +2021,50 @@ function permitirGPS() {
                     const bairro = addr.suburb || addr.neighbourhood || addr.neighborhood || addr.district || '';
                     const cidade = addr.city || addr.town || addr.village || addr.municipality || '';
                     const estado = addr.state || '';
-                    const pais = addr.country || '';
                     const partes = [rua, bairro, cidade, estado].filter(Boolean);
-                    origemNome = partes.join(', ') || (d.display_name || '').split(',')[0];
-                    document.getElementById('input-origem').value = origemNome;
-                    atualizarMarcadorGPS(lat, lon, pos.coords.accuracy);
+                    const nome = partes.join(', ') || (d.display_name || '').split(',')[0] || t('minhaLocalizacao');
+                    definirOrigem(lat, lon, nome);
+                    atualizarMarcadorGPS(lat, lon, acc, nome);
                     mapa.setView([lat, lon], 15);
-                    mostrarToast(`Localização: ${origemNome}`, "sucesso", 3000);
+                    mostrarToast(`Localização: ${nome}`, "sucesso", 3000);
                 })
                 .catch(() => {
-                    origemNome = t('minhaLocalizacao');
-                    document.getElementById('input-origem').value = origemNome;
-                    atualizarMarcadorGPS(lat, lon, pos.coords.accuracy);
+                    atualizarMarcadorGPS(lat, lon, acc, t('minhaLocalizacao'));
                     mapa.setView([lat, lon], 15);
                     mostrarToast("Localização encontrada!", "sucesso", 2000);
                 });
         },
         err => {
             console.warn("GPS:", err.message);
-            criarMarcadorFallback();
-            mostrarToast(t("msgGPSNaoDisponivel"), "erro", 5000);
+            if (origemManual) {
+                definirOrigem(origemManual.lat, origemManual.lon, origemManual.nome || 'Minha origem');
+                criarMarcadorFallback();
+                mapa.setView([latOrigem, lonOrigem], 12);
+                mostrarAvisoLocalizacao(`Não foi possível usar o GPS. Mantendo a origem salva: ${origemNome}.`);
+            } else {
+                criarMarcadorFallback();
+                mostrarAvisoLocalizacao('Não foi possível obter sua localização. Digite sua cidade na barra acima ou use o seletor (globo).');
+                mostrarToast(t("msgGPSNaoDisponivel"), "erro", 5000);
+            }
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
 
-    // Monitoramento contínuo da localização
+    // Monitoramento contínuo: só aplica posições com precisão boa.
     if (navigator.geolocation) {
         gpsWatchId = navigator.geolocation.watchPosition(
             pos => {
+                // Origem manual definida pelo usuário tem prioridade sobre o GPS.
+                if (origemManual) return;
+                if (!precisaoBoa(pos.coords.accuracy)) return;
                 latOrigem = pos.coords.latitude; lonOrigem = pos.coords.longitude;
                 latUsuarioGPS = latOrigem; lonUsuarioGPS = lonOrigem;
+                origemDefinida = true;
                 atualizarMarcadorGPS(latOrigem, lonOrigem, pos.coords.accuracy);
+                fecharAvisoLocalizacao();
             },
             err => { console.warn("GPS watch:", err.message); },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
         );
         window.addEventListener('beforeunload', () => {
             if (gpsWatchId !== null) navigator.geolocation.clearWatch(gpsWatchId);
@@ -1949,19 +2076,24 @@ function negarGPS() {
     document.getElementById('modal-gps').classList.remove('visivel');
     gpsPermitido = false;
     criarMarcadorFallback();
-    mostrarToast("Você pode digitar ou usar o seletor de localização.", "sucesso", 3000);
+    if (origemDefinida) {
+        mostrarToast(`Origem: ${origemNome}. Toque no ícone de GPS para atualizar.`, "sucesso", 4000);
+    } else {
+        mostrarAvisoLocalizacao('Digite sua cidade na barra de origem ou use o seletor (globo) para definir de onde você está saindo.');
+        mostrarToast("Digite sua cidade ou use o seletor de localização.", "sucesso", 4000);
+    }
 }
 
 // ============ GPS ============
-function atualizarMarcadorGPS(lat, lon, accuracy) {
+function atualizarMarcadorGPS(lat, lon, accuracy, nome) {
     gpsAtivo = true;
     if (accuracyCircle) mapa.removeLayer(accuracyCircle);
     if (marcadorOrigem) mapa.removeLayer(marcadorOrigem);
     if (gpsRing) mapa.removeLayer(gpsRing);
     accuracyCircle = L.circle([lat, lon], { radius: accuracy || 50, className: 'gps-accuracy' }).addTo(mapa);
     gpsRing = L.circleMarker([lat, lon], { radius: 14, className: 'gps-ring' }).addTo(mapa);
-    marcadorOrigem = L.circleMarker([lat, lon], { radius: 7, className: 'gps-dot' }).addTo(mapa).bindPopup(t('minhaLocalizacao'));
-    origemNome = t('minhaLocalizacao');
+    marcadorOrigem = L.circleMarker([lat, lon], { radius: 7, className: 'gps-dot' }).addTo(mapa).bindPopup(nome || t('minhaLocalizacao'));
+    origemNome = nome || t('minhaLocalizacao');
     document.getElementById('input-origem').value = origemNome;
 }
 
@@ -1969,7 +2101,14 @@ function criarMarcadorFallback() {
     if (marcadorOrigem) mapa.removeLayer(marcadorOrigem);
     if (accuracyCircle) { mapa.removeLayer(accuracyCircle); accuracyCircle = null; }
     if (gpsRing) { mapa.removeLayer(gpsRing); gpsRing = null; }
-    marcadorOrigem = L.marker([latOrigem, lonOrigem], { className: 'gps-fallback' }).addTo(mapa).bindPopup('Sua Origem');
+    if (!origemDefinida) return;
+    marcadorOrigem = L.marker([latOrigem, lonOrigem], { draggable: true, className: 'gps-fallback' })
+        .addTo(mapa).bindPopup('Origem: ' + (origemNome || 'Sua Origem'));
+    marcadorOrigem.on('dragend', function(e) {
+        const p = e.target.getLatLng();
+        definirOrigem(p.lat, p.lng, origemNome || 'Minha origem', { limparGPS: true, salvar: true });
+        if (latDestino !== null) calcularRota();
+    });
 }
 
 function ativarLoading(ativo) { document.getElementById('loading-overlay').classList.toggle('ativo', ativo); }
@@ -2229,12 +2368,15 @@ function buscarOrigem() {
         ativarLoading(false);
         if (d && d.length > 0) {
             const lugar = d[0];
-            latOrigem = parseFloat(lugar.lat); lonOrigem = parseFloat(lugar.lon);
-            origemNome = lugar.display_name.split(',')[0];
-            if (gpsAtivo) { if (accuracyCircle) { mapa.removeLayer(accuracyCircle); accuracyCircle = null; } if (gpsRing) { mapa.removeLayer(gpsRing); gpsRing = null; } gpsAtivo = false; }
+            const nome = lugar.display_name.split(',')[0];
+            definirOrigem(parseFloat(lugar.lat), parseFloat(lugar.lon), nome, { limparGPS: true, salvar: true });
             if (marcadorOrigem) mapa.removeLayer(marcadorOrigem);
             marcadorOrigem = L.marker([latOrigem, lonOrigem], { draggable: true }).addTo(mapa).bindPopup('Origem: ' + origemNome);
-            marcadorOrigem.on('dragend', function(e) { const p = e.target.getLatLng(); latOrigem = p.lat; lonOrigem = p.lng; if (latDestino !== null) calcularRota(); });
+            marcadorOrigem.on('dragend', function(ev) {
+                const p = ev.target.getLatLng();
+                definirOrigem(p.lat, p.lng, origemNome, { limparGPS: true, salvar: true });
+                if (latDestino !== null) calcularRota();
+            });
             if (latDestino !== null) calcularRota();
         } else { mostrarToast(t("msgEnderecoNaoEncontrado"), "erro"); }
     }).catch(() => { ativarLoading(false); mostrarToast(t("msgErroBusca"), "erro"); });
@@ -2244,18 +2386,37 @@ function usarGPScomoOrigem() {
     if (navigator.geolocation && window.location.protocol !== 'file:') {
         navigator.geolocation.getCurrentPosition(
             pos => {
-                latOrigem = pos.coords.latitude; lonOrigem = pos.coords.longitude;
-                latUsuarioGPS = latOrigem; lonUsuarioGPS = lonOrigem;
+                const acc = pos.coords.accuracy;
+                const lat = pos.coords.latitude, lon = pos.coords.longitude;
+                if (!precisaoBoa(acc)) {
+                    // PC sem Wi-Fi: o navegador devolve a cidade do provedor (pode ser outro estado).
+                    if (origemManual) {
+                        definirOrigem(origemManual.lat, origemManual.lon, origemManual.nome || 'Minha origem');
+                        criarMarcadorFallback();
+                        mapa.setView([latOrigem, lonOrigem], 12);
+                        mostrarAvisoLocalizacao(`GPS impreciso (${formatarPrecisao(acc)}). Mantendo a origem salva: ${origemNome}.`);
+                    } else {
+                        mapa.setView([lat, lon], 11);
+                        mostrarAvisoLocalizacao(`GPS impreciso (${formatarPrecisao(acc)}) — pode estar em outra cidade/estado. Digite sua cidade para corrigir.`);
+                    }
+                    return;
+                }
+                esquecerOrigemManual();
+                latOrigem = lat; lonOrigem = lon;
+                latUsuarioGPS = lat; lonUsuarioGPS = lon;
                 origemNome = t('minhaLocalizacao');
+                origemDefinida = true;
                 document.getElementById('input-origem').value = origemNome;
                 if (marcadorOrigem) mapa.removeLayer(marcadorOrigem);
                 if (accuracyCircle) { mapa.removeLayer(accuracyCircle); accuracyCircle = null; }
                 if (gpsRing) { mapa.removeLayer(gpsRing); gpsRing = null; }
-                atualizarMarcadorGPS(latOrigem, lonOrigem, pos.coords.accuracy);
+                atualizarMarcadorGPS(latOrigem, lonOrigem, acc);
                 mapa.setView([latOrigem, lonOrigem], 15);
+                fecharAvisoLocalizacao();
                 if (latDestino !== null) calcularRota();
                 mostrarToast(t("msgUsandoLocalizacao"), "sucesso", 2000);
-            }, () => mostrarToast("Não foi possível obter localização.", "erro"),
+            },
+            () => mostrarToast("Não foi possível obter localização. Digite sua cidade.", "erro", 4000),
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     } else { toggleSeletorHierarquico(); }
@@ -2285,12 +2446,14 @@ document.getElementById('input-origem').addEventListener('input', function() {
                     item.onclick = function() {
                         document.getElementById('input-origem').value = nome;
                         container.classList.remove('visivel');
-                        latOrigem = parseFloat(lugar.lat); lonOrigem = parseFloat(lugar.lon);
-                        origemNome = nome;
-                        if (gpsAtivo) { if (accuracyCircle) { mapa.removeLayer(accuracyCircle); accuracyCircle = null; } if (gpsRing) { mapa.removeLayer(gpsRing); gpsRing = null; } gpsAtivo = false; }
+                        definirOrigem(parseFloat(lugar.lat), parseFloat(lugar.lon), nome, { limparGPS: true, salvar: true });
                         if (marcadorOrigem) mapa.removeLayer(marcadorOrigem);
                         marcadorOrigem = L.marker([latOrigem, lonOrigem], { draggable: true }).addTo(mapa).bindPopup('Origem: ' + origemNome);
-                        marcadorOrigem.on('dragend', function(ev) { const p = ev.target.getLatLng(); latOrigem = p.lat; lonOrigem = p.lng; if (latDestino !== null) calcularRota(); });
+                        marcadorOrigem.on('dragend', function(ev) {
+                            const p = ev.target.getLatLng();
+                            definirOrigem(p.lat, p.lng, origemNome, { limparGPS: true, salvar: true });
+                            if (latDestino !== null) calcularRota();
+                        });
                         if (latDestino !== null) calcularRota();
                     };
                     container.appendChild(item);
@@ -2405,6 +2568,11 @@ function ajustarTempoAproximado(dados, velocidadeKmh) {
 // ============ CALCULAR ROTA ============
 async function calcularRota() {
     if (latDestino === null || lonDestino === null) return;
+    if (!origemDefinida) {
+        mostrarToast('Defina sua origem primeiro: digite sua cidade ou toque no ícone de GPS.', 'erro', 4500);
+        document.getElementById('input-origem').focus();
+        return;
+    }
     ativarLoading(true);
     fecharPainelInstrucoes();
     const modoInfo = MODOS[modoAtual];
@@ -2660,7 +2828,7 @@ function limparRota() {
     fecharPainelInstrucoes();
     if (modoMotorista) pararNavegacao();
     pararReRoteamento();
-    mapa.setView([latOrigem, lonOrigem], 14);
+    if (origemDefinida) mapa.setView([latOrigem, lonOrigem], 14);
     mostrarToast(t("msgRotaRemovida"), "sucesso", 2000);
 }
 
@@ -2669,18 +2837,29 @@ function centralizarLocalizacao() {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             pos => {
-                latOrigem = pos.coords.latitude; lonOrigem = pos.coords.longitude;
-                latUsuarioGPS = latOrigem; lonUsuarioGPS = lonOrigem;
+                const acc = pos.coords.accuracy;
+                const lat = pos.coords.latitude, lon = pos.coords.longitude;
+                if (!precisaoBoa(acc)) {
+                    // Só centraliza o mapa: não troca a origem por uma localização por IP.
+                    mapa.setView([lat, lon], 11);
+                    mostrarAvisoLocalizacao(`Localização aproximada (${formatarPrecisao(acc)}) — pode estar em outra cidade/estado. Digite sua cidade para corrigir.`);
+                    mostrarToast("Localização aproximada — confira se está na cidade certa.", "erro", 4000);
+                    return;
+                }
+                latOrigem = lat; lonOrigem = lon;
+                latUsuarioGPS = lat; lonUsuarioGPS = lon;
+                origemDefinida = true;
                 if (gpsAtivo && marcadorOrigem) {
                     marcadorOrigem.setLatLng([latOrigem, lonOrigem]);
                     if (gpsRing) gpsRing.setLatLng([latOrigem, lonOrigem]);
-                    if (accuracyCircle) { accuracyCircle.setLatLng([latOrigem, lonOrigem]); accuracyCircle.setRadius(pos.coords.accuracy); }
-                } else { atualizarMarcadorGPS(latOrigem, lonOrigem, pos.coords.accuracy); }
+                    if (accuracyCircle) { accuracyCircle.setLatLng([latOrigem, lonOrigem]); accuracyCircle.setRadius(acc); }
+                } else { atualizarMarcadorGPS(latOrigem, lonOrigem, acc); }
                 origemNome = t('minhaLocalizacao');
                 document.getElementById('input-origem').value = origemNome;
                 mapa.setView([latOrigem, lonOrigem], 16);
+                fecharAvisoLocalizacao();
                 mostrarToast("Centralizado!", "sucesso", 1500);
-            }, () => mostrarToast("Não foi possível.", "erro"),
+            }, () => mostrarToast("Não foi possível obter sua localização. Digite sua cidade.", "erro", 4000),
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
     } else { mostrarToast("GPS não suportado.", "erro"); }
@@ -2783,17 +2962,15 @@ function atualizarFavoritos() {
     p.classList.add('visivel');
 }
 function carregarFavorito(f) {
-    latOrigem = f.origem.lat; lonOrigem = f.origem.lon; origemNome = f.origem.nome;
+    definirOrigem(f.origem.lat, f.origem.lon, f.origem.nome, { limparGPS: true, salvar: true });
     latDestino = f.destino.lat; lonDestino = f.destino.lon; ultimoDestinoNome = f.destino.nome;
     veiculoAtual = f.veiculo;
-    document.getElementById('input-origem').value = origemNome;
     document.getElementById('input-destino').value = ultimoDestinoNome;
     modoAtual = f.modo || 'carro';
     document.querySelectorAll('.botao-veiculo').forEach(b => { b.classList.remove('ativo'); if (b.getAttribute('data-mode') === modoAtual) b.classList.add('ativo'); });
-    if (gpsAtivo) { if (accuracyCircle) { mapa.removeLayer(accuracyCircle); accuracyCircle = null; } if (gpsRing) { mapa.removeLayer(gpsRing); gpsRing = null; } gpsAtivo = false; }
     if (marcadorOrigem) mapa.removeLayer(marcadorOrigem);
     marcadorOrigem = L.marker([latOrigem, lonOrigem], { draggable: true }).addTo(mapa).bindPopup('Origem: ' + origemNome);
-    marcadorOrigem.on('dragend', function(e) { const p = e.target.getLatLng(); latOrigem = p.lat; lonOrigem = p.lng; if (latDestino !== null) calcularRota(); });
+    marcadorOrigem.on('dragend', function(e) { const p = e.target.getLatLng(); definirOrigem(p.lat, p.lng, origemNome, { limparGPS: true, salvar: true }); if (latDestino !== null) calcularRota(); });
     if (marcadorDestino) mapa.removeLayer(marcadorDestino);
     marcadorDestino = L.marker([latDestino, lonDestino], { draggable: true }).addTo(mapa).bindPopup(`<b>Destino:</b><br>${ultimoDestinoNome}`).openPopup();
     marcadorDestino.on('dragend', function(e) { const p = e.target.getLatLng(); latDestino = p.lat; lonDestino = p.lng; calcularRota(); });
@@ -2890,16 +3067,14 @@ function atualizarHistorico() {
     });
 }
 function carregarHistorico(h) {
-    latOrigem = h.latOrigem; lonOrigem = h.lonOrigem; origemNome = h.origem;
+    definirOrigem(h.latOrigem, h.lonOrigem, h.origem, { limparGPS: true, salvar: true });
     latDestino = h.latDestino; lonDestino = h.lonDestino; ultimoDestinoNome = h.destino;
     veiculoAtual = h.veiculo; modoAtual = h.modo || 'carro';
-    document.getElementById('input-origem').value = origemNome;
     document.getElementById('input-destino').value = ultimoDestinoNome;
     document.querySelectorAll('.botao-veiculo').forEach(b => { b.classList.remove('ativo'); if (b.getAttribute('data-mode') === modoAtual) b.classList.add('ativo'); });
-    if (gpsAtivo) { if (accuracyCircle) { mapa.removeLayer(accuracyCircle); accuracyCircle = null; } if (gpsRing) { mapa.removeLayer(gpsRing); gpsRing = null; } gpsAtivo = false; }
     if (marcadorOrigem) mapa.removeLayer(marcadorOrigem);
     marcadorOrigem = L.marker([latOrigem, lonOrigem], { draggable: true }).addTo(mapa).bindPopup('Origem: ' + origemNome);
-    marcadorOrigem.on('dragend', function(e) { const p = e.target.getLatLng(); latOrigem = p.lat; lonOrigem = p.lng; if (latDestino !== null) calcularRota(); });
+    marcadorOrigem.on('dragend', function(e) { const p = e.target.getLatLng(); definirOrigem(p.lat, p.lng, origemNome, { limparGPS: true, salvar: true }); if (latDestino !== null) calcularRota(); });
     if (marcadorDestino) mapa.removeLayer(marcadorDestino);
     marcadorDestino = L.marker([latDestino, lonDestino], { draggable: true }).addTo(mapa).bindPopup(`<b>Destino:</b><br>${ultimoDestinoNome}`).openPopup();
     marcadorDestino.on('dragend', function(e) { const p = e.target.getLatLng(); latDestino = p.lat; lonDestino = p.lng; calcularRota(); });
@@ -2949,13 +3124,29 @@ function gerarImagemRota() {
 }
 
 // ============ SERVICE WORKER ============
+const versaoEl = document.getElementById('versao-app');
+if (versaoEl) versaoEl.textContent = 'v' + APP_VERSION;
+
 if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
+    let recarregandoPorSW = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (recarregandoPorSW) return;
+        recarregandoPorSW = true;
+        window.location.reload();
+    });
     navigator.serviceWorker.register('sw.js').then(reg => {
+        // Procura atualização agora e sempre que o app volta ao primeiro plano.
+        reg.update().catch(() => {});
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update().catch(() => {});
+        });
         reg.addEventListener('updatefound', () => {
             const newSW = reg.installing;
             if (newSW) {
                 newSW.addEventListener('statechange', () => {
-                    if (newSW.state === 'activated') {
+                    if (newSW.state === 'activated' && !recarregandoPorSW) {
+                        recarregandoPorSW = true;
                         window.location.reload();
                     }
                 });

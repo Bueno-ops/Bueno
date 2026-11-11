@@ -1,4 +1,4 @@
-const CACHE = 'rotas-cache-v6';
+const CACHE = 'rotas-cache-v7';
 const URLS = [
     'app.html',
     'index.html',
@@ -32,9 +32,14 @@ self.addEventListener('activate', e => {
     );
 });
 
+self.addEventListener('message', e => {
+    if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 self.addEventListener('fetch', e => {
     const url = new URL(e.request.url);
-    if (url.pathname.endsWith('app.html') || url.pathname === '/' || url.pathname === '') {
+    const navegacao = e.request.mode === 'navigate';
+    if (navegacao || url.pathname.endsWith('app.html') || url.pathname.endsWith('index.html') || url.pathname === '/' || url.pathname.endsWith('/')) {
         e.respondWith(networkFirst(e.request));
     } else if (url.origin === 'https://router.project-osrm.org' || url.origin === 'https://routing.openstreetmap.de' || url.origin === 'https://nominatim.openstreetmap.org') {
         e.respondWith(networkFirst(e.request));
@@ -50,7 +55,8 @@ async function cacheFirst(req) {
 
 async function networkFirst(req) {
     try {
-        const res = await fetch(req);
+        // no-store ignora o cache HTTP do GitHub Pages, que pode segurar uma versão antiga do app.
+        const res = await fetch(req, { cache: 'no-store' });
         return res;
     } catch {
         const cached = await caches.match(req);
